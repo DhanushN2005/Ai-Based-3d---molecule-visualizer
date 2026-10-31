@@ -1,13 +1,49 @@
+import glob
+import os
+import shutil
 import subprocess
 
-def run_blender_script(script_path):
-    blender_path = r"C:\Program Files\Blender Foundation\Blender 4.4\blender.exe"  # ✅ Update path if needed
 
+def find_blender():
+    """Locate blender.exe.
+
+    Order: BLENDER_PATH env var -> `blender` on PATH -> newest install under
+    C:\\Program Files\\Blender Foundation.
+    """
+    env = os.environ.get("BLENDER_PATH")
+    if env and os.path.isfile(env):
+        return env
+
+    on_path = shutil.which("blender")
+    if on_path:
+        return on_path
+
+    pattern = r"C:\Program Files\Blender Foundation\Blender *\blender.exe"
+    installs = glob.glob(pattern)
+
+    def version_key(path):
+        folder = os.path.basename(os.path.dirname(path))  # "Blender 4.4"
+        try:
+            return tuple(int(p) for p in folder.split()[-1].split("."))
+        except ValueError:
+            return (0,)
+
+    if installs:
+        return max(installs, key=version_key)
+
+    raise FileNotFoundError(
+        "Blender not found. Install it or set the BLENDER_PATH environment "
+        "variable to the full path of blender.exe."
+    )
+
+
+# Blender calling
+def run_blender_script(script_path):
     cmd = [
-        blender_path,
+        find_blender(),
         "--background",
         "--python",
-        script_path
+        os.path.abspath(script_path),
     ]
 
     try:
@@ -16,7 +52,8 @@ def run_blender_script(script_path):
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True
+            text=True,
+            timeout=120,
         )
         print("✅ Blender Output:\n", result.stdout)
         if result.stderr:
