@@ -2,183 +2,238 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>3D Molecule Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Molecule Visualizer</title>
   <style>
+    :root {
+      --accent: #5eead4;
+      --accent-2: #38bdf8;
+      --text: #f1f5f9;
+      --muted: #cbd5e1;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
-      padding: 0;
-      height: 100vh;
-      overflow: hidden;
-      font-family: Arial, sans-serif;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color: var(--text);
+      background: #0b1220;
     }
-
     .bg-video {
-      position: fixed;
-      top: 0;
-      left: 0;
-      min-width: 100%;
-      min-height: 100%;
-      object-fit: cover;
-      z-index: -1;
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; z-index: -2;
     }
-
-    .content-wrapper {
-      height: 100vh;
-      width: 100vw;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      backdrop-filter: blur(10px);
-      background-color: rgba(255, 255, 255, 0.1);
+    .overlay {
+      position: fixed; inset: 0; z-index: -1;
+      background: radial-gradient(ellipse at top, rgba(11,18,32,.55), rgba(11,18,32,.88));
     }
-
-    .box {
-      width: 400px;
-      padding: 40px;
-      background: rgba(255, 255, 255, 0.25);
-      border-radius: 15px;
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-      backdrop-filter: blur(5px);
+    main {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%; max-width: 480px;
+      padding: 40px 32px;
+      background: rgba(15, 23, 42, .6);
+      border: 1px solid rgba(255,255,255,.12);
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.45);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       text-align: center;
     }
-
-    .box h2 {
-      margin-bottom: 20px;
-      font-size: 24px;
-      color: #fff;
+    .logo { font-size: 40px; line-height: 1; }
+    h1 {
+      margin: 12px 0 6px;
+      font-size: 1.7rem;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text; background-clip: text;
+      color: transparent;
     }
-
+    .sub { margin: 0 0 24px; color: var(--muted); font-size: .95rem; }
+    form { display: flex; gap: 8px; }
     input[type="text"] {
-      width: 100%;
-      padding: 10px;
-      margin: 10px 0;
-      border: none;
-      border-radius: 5px;
+      flex: 1; min-width: 0;
+      padding: 13px 16px;
+      font-size: 1rem;
+      color: var(--text);
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.18);
+      border-radius: 12px;
+      outline: none;
+      transition: border-color .15s, box-shadow .15s;
     }
-
+    input[type="text"]::placeholder { color: #94a3b8; }
+    input[type="text"]:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(94,234,212,.25);
+    }
     button {
-      padding: 10px 20px;
-      background-color: #0078d4;
-      color: #fff;
-      border: none;
-      border-radius: 5px;
+      padding: 13px 22px;
+      font-size: 1rem; font-weight: 600;
+      color: #04211d;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      border: none; border-radius: 12px;
       cursor: pointer;
+      transition: transform .1s, opacity .15s;
     }
-
-    button:hover {
-      background-color: #005fa3;
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: .55; cursor: wait; transform: none; }
+    button.secondary {
+      color: var(--text);
+      background: rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.2);
+      margin-top: 8px;
     }
-
-    #loading-text {
-      margin-top: 20px;
-      font-size: 16px;
-      color: white;
-      display: none;
+    .chips { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+    .chip {
+      padding: 6px 12px; font-size: .85rem;
+      color: var(--muted);
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 999px;
+      cursor: pointer;
+      transition: background .15s, color .15s;
     }
-
-    #manual-link {
-      margin-top: 20px;
-      display: none;
+    .chip:hover { background: rgba(94,234,212,.18); color: var(--text); }
+    .links { margin-top: 20px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .links a { padding: 8px 14px; font-size: .9rem; color: var(--text); text-decoration: none;
+               background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; }
+    .links a:hover { background: rgba(94,234,212,.2); }
+    #status { margin-top: 20px; min-height: 1.4em; font-size: .95rem; color: var(--muted); }
+    .spinner {
+      display: inline-block; width: 14px; height: 14px; margin-right: 8px;
+      vertical-align: -2px;
+      border: 2px solid rgba(255,255,255,.3); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .8s linear infinite;
     }
-
-    #manual-link p {
-      color: white;
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #error-text { color: #fca5a5; }
+    #manual-link { display: none; }
+    @media (max-width: 480px) {
+      .card { padding: 28px 20px; }
+      form { flex-direction: column; }
     }
-
-    #manual-link button {
-      background-color: #28a745;
-    }
-
-    #manual-link button:hover {
-      background-color: #1e7e34;
-    }
-
-    .error {
-      color: red;
-      margin-top: 10px;
-      font-size: 14px;
+    @media (prefers-reduced-motion: reduce) {
+      .bg-video { display: none; }
+      .spinner { animation: none; }
     }
   </style>
 </head>
 <body>
-
-  <!-- ✅ Flask-based Background Video path -->
   <video class="bg-video" autoplay muted loop playsinline>
     <source src="{{ url_for('static', filename='bg.mp4') }}" type="video/mp4">
-    Your browser does not support the video tag.
   </video>
+  <div class="overlay"></div>
 
-  <!-- 💡 Content Box -->
-  <div class="content-wrapper">
-    <div class="box">
-      <h2>Enter Molecule Name</h2>
+  <main>
+    <div class="card">
+      <div class="logo" aria-hidden="true">🧪</div>
+      <h1>3D Molecule Visualizer</h1>
+      <p class="sub">Search any molecule (built-in list or PubChem) and explore it in 3D.</p>
 
-      <form id="molForm" method="POST" onsubmit="startProcessing(); return false;">
-        <input type="text" name="molecule" id="molecule-input" placeholder="e.g., methane" required>
-        <button type="submit">Generate</button>
+      <form id="molForm" autocomplete="off">
+        <input type="text" id="molecule-input" name="molecule" list="molecule-list"
+               placeholder="e.g. caffeine, dopamine, ibuprofen" required autofocus>
+        <button type="submit" id="submit-btn">Generate</button>
       </form>
+      <datalist id="molecule-list">
+        {% for m in molecules %}<option value="{{ m }}">{% endfor %}
+      </datalist>
 
-      <div id="loading-text">⏳ Processing molecule... You will be redirected shortly.</div>
-      <div id="manual-link">
-        <p>If you're not redirected, you can go manually:</p>
-        <button onclick="goToViewer()">Go to Viewer</button>
+      <div class="chips" id="chips">
+        {% for m in molecules[:6] %}<span class="chip" role="button" tabindex="0" data-name="{{ m }}">{{ m }}</span>{% endfor %}
       </div>
-      <div id="error-text" class="error"></div>
+
+      <div class="links">
+        <a href="/quiz">🎯 Quiz mode</a>
+        <a href="/compare">⚖️ Compare two molecules</a>
+      </div>
+
+      <div id="status" role="status" aria-live="polite"></div>
+      <div id="manual-link">
+        <button type="button" class="secondary" id="go-btn">Go to viewer</button>
+      </div>
     </div>
-  </div>
+  </main>
 
-  <!-- 🚀 Script -->
   <script>
-    let lastRedirectURL = "";
+    const form = document.getElementById("molForm");
+    const input = document.getElementById("molecule-input");
+    const btn = document.getElementById("submit-btn");
+    const status = document.getElementById("status");
+    const manual = document.getElementById("manual-link");
+    let redirectURL = "";
 
-    function startProcessing() {
-      const moleculeInput = document.getElementById("molecule-input");
-      const molecule = moleculeInput.value.trim().toLowerCase();
-      const loadingText = document.getElementById("loading-text");
-      const manualLink = document.getElementById("manual-link");
-      const errorText = document.getElementById("error-text");
+    function setStatus(html, isError) {
+      status.innerHTML = html;
+      status.id = "status";
+      status.className = isError ? "error" : "";
+      status.style.color = isError ? "#fca5a5" : "";
+    }
 
-      if (!molecule) {
-        errorText.textContent = "Please enter a molecule name.";
-        return;
-      }
+    async function generate(name) {
+      name = name.trim().toLowerCase();
+      if (!name) { setStatus("Please enter a molecule name.", true); return; }
+      btn.disabled = true;
+      manual.style.display = "none";
+      setStatus('<span class="spinner"></span>Looking up and building the 3D model… new molecules can take a few seconds.');
 
-      errorText.textContent = "";
-      loadingText.style.display = "block";
-      manualLink.style.display = "none";
-
-      const formData = new FormData();
-      formData.append("molecule", molecule);
-
-      fetch("/", {
-        method: "POST",
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
+      try {
+        const body = new FormData();
+        body.append("molecule", name);
+        const res = await fetch("/", { method: "POST", body });
+        const data = await res.json();
         if (data.success) {
-          lastRedirectURL = data.viewer_url;
-          manualLink.style.display = "block";
-          setTimeout(() => {
-            window.location.href = lastRedirectURL;
-          }, 2000);
+          redirectURL = data.viewer_url;
+          setStatus("Done! Opening the viewer…");
+          manual.style.display = "block";
+          setTimeout(() => { window.location.href = redirectURL; }, 800);
         } else {
-          loadingText.style.display = "none";
-          errorText.textContent = data.error || "Unknown error occurred.";
+          setStatus(data.error || "Unknown error occurred.", true);
+          btn.disabled = false;
         }
-      })
-      .catch(err => {
-        loadingText.style.display = "none";
-        errorText.textContent = "Something went wrong.";
-        console.error("Error:", err);
-      });
-    }
-
-    function goToViewer() {
-      if (lastRedirectURL) {
-        window.location.href = lastRedirectURL;
+      } catch (err) {
+        console.error(err);
+        setStatus("Something went wrong. Please try again.", true);
+        btn.disabled = false;
       }
     }
+
+    // live suggestions: built-in names first, then PubChem
+    let suggestTimer = null;
+    input.addEventListener("input", () => {
+      clearTimeout(suggestTimer);
+      const q = input.value.trim();
+      if (q.length < 2) return;
+      suggestTimer = setTimeout(async () => {
+        try {
+          const res = await fetch("/api/suggest?q=" + encodeURIComponent(q));
+          if (!res.ok) return;
+          const { names } = await res.json();
+          const list = document.getElementById("molecule-list");
+          list.innerHTML = "";
+          names.forEach(n => { const o = document.createElement("option"); o.value = n; list.appendChild(o); });
+        } catch (_) { /* suggestions are optional */ }
+      }, 250);
+    });
+
+    form.addEventListener("submit", e => { e.preventDefault(); generate(input.value); });
+    document.getElementById("go-btn").addEventListener("click", () => {
+      if (redirectURL) window.location.href = redirectURL;
+    });
+    document.getElementById("chips").addEventListener("click", e => {
+      const chip = e.target.closest(".chip");
+      if (chip) { input.value = chip.dataset.name; generate(chip.dataset.name); }
+    });
+    document.getElementById("chips").addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") {
+        const chip = e.target.closest(".chip");
+        if (chip) { e.preventDefault(); chip.click(); }
+      }
+    });
   </script>
 </body>
 </html>

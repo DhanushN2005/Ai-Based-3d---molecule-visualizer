@@ -3,150 +3,403 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>3D Molecule Viewer</title>
-  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <title>{{ molecule|capitalize }} · 3D Molecule Visualizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background-color: #f0f0f0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
+    :root {
+      --bg: #0b1220; --panel: #131c31; --border: rgba(255,255,255,.1);
+      --text: #f1f5f9; --muted: #94a3b8; --accent: #5eead4; --accent-2: #38bdf8;
     }
-    header {
-      margin: 20px;
-      text-align: center;
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; color: var(--text); background: var(--bg);
+           font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+              padding: 12px 24px; border-bottom: 1px solid var(--border); }
+    .back { color: var(--muted); text-decoration: none; }
+    .back:hover { color: var(--accent); }
+    .brand { font-weight: 600; margin-right: auto; }
+    .search { display: flex; gap: 6px; }
+    input[type=text], select {
+      padding: 8px 12px; font-size: .9rem; color: var(--text);
+      background: rgba(255,255,255,.07); border: 1px solid var(--border);
+      border-radius: 10px; outline: none; min-width: 0;
     }
-    model-viewer {
-      width: 90vw;
-      height: 80vh;
-      border: 1px solid #ccc;
-      background: #111;
+    select option { color: #111; }
+    input[type=text]:focus, select:focus { border-color: var(--accent); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr);
+              gap: 24px; max-width: 1500px; margin: 0 auto; padding: 24px; }
+    .stage { position: relative; height: 78vh; min-height: 440px; overflow: hidden;
+             display: flex; flex-direction: column;
+             border: 1px solid var(--border); border-radius: 18px; background: #0b1220; }
+    #viewer-box { position: relative; flex: 1; min-height: 0; }
+    .toolbar { position: relative; z-index: 5; padding: 10px;
+               display: flex; flex-wrap: wrap; gap: 6px;
+               border-bottom: 1px solid var(--border); background: rgba(15,23,42,.6); }
+    .tbtn { padding: 7px 11px; font-size: .85rem; color: var(--text); cursor: pointer;
+            background: rgba(15,23,42,.75); border: 1px solid var(--border);
+            border-radius: 9px; backdrop-filter: blur(6px); }
+    .tbtn:hover { background: rgba(56,189,248,.25); }
+    .tbtn.on { background: rgba(94,234,212,.28); border-color: var(--accent); }
+    .toolbar select { background: rgba(15,23,42,.75); backdrop-filter: blur(6px); }
+    #tip { position: absolute; z-index: 6; display: none; pointer-events: none;
+           padding: 6px 10px; font-size: .85rem; border-radius: 8px;
+           background: rgba(15,23,42,.92); border: 1px solid var(--accent); }
+    .hint { position: absolute; left: 12px; bottom: 10px; z-index: 5; font-size: .75rem;
+            color: var(--muted); pointer-events: none; }
+    .side { display: flex; flex-direction: column; gap: 16px; }
+    .panel { background: var(--panel); border: 1px solid var(--border);
+             border-radius: 16px; padding: 18px; }
+    h1 { margin: 0; font-size: 1.8rem; text-transform: capitalize; }
+    h2 { margin: 0 0 10px; font-size: .8rem; color: var(--muted); font-weight: 600;
+         letter-spacing: .06em; text-transform: uppercase; }
+    .formula { display: inline-block; margin-top: 8px; padding: 5px 14px; font-size: 1.15rem;
+               font-weight: 600; color: #04211d; border-radius: 999px;
+               background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 14px; }
+    .stat { background: rgba(255,255,255,.05); border-radius: 10px; padding: 8px; text-align: center; }
+    .stat b { display: block; font-size: 1.05rem; }
+    .stat span { font-size: .72rem; color: var(--muted); }
+    .legend { display: flex; flex-direction: column; gap: 6px; }
+    .lrow { display: flex; align-items: center; gap: 10px; font-size: .92rem; }
+    .dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgba(255,255,255,.4); flex: none; }
+    .lrow .cnt { margin-left: auto; color: var(--muted); }
+    #explanation { margin: 0; line-height: 1.75; color: #e2e8f0; }
+    #explanation .s { border-radius: 4px; transition: background .2s; }
+    #explanation .s.now { background: rgba(94,234,212,.28); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px;
+           font-size: .9rem; font-weight: 600; color: var(--text); cursor: pointer;
+           background: rgba(255,255,255,.08); border: 1px solid var(--border);
+           border-radius: 10px; text-decoration: none; }
+    .btn:hover { background: rgba(255,255,255,.15); }
+    .btn.primary { color: #04211d; border: none;
+                   background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .speech { margin-top: 12px; gap: 10px; font-size: .8rem; color: var(--muted); }
+    input[type=range] { width: 90px; accent-color: var(--accent); }
+    .ask { display: flex; gap: 8px; }
+    .ask input { flex: 1; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+    .chip { padding: 4px 10px; font-size: .78rem; color: var(--muted); cursor: pointer;
+            border: 1px solid var(--border); border-radius: 999px; background: rgba(255,255,255,.05); }
+    .chip:hover { color: var(--text); background: rgba(94,234,212,.15); }
+    #answer { margin: 8px 0 0; line-height: 1.7; color: #e2e8f0; white-space: pre-wrap; }
+    #answer.err { color: #fca5a5; }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; padding: 14px; }
+      .stage { height: 60vh; }
     }
-    #formula-display {
-      margin-top: 15px;
-      font-size: 18px;
-      font-weight: bold;
-      background: rgba(255,255,255,0.8);
-      padding: 8px 15px;
-      border-radius: 8px;
-    }
-    button {
-      margin: 15px;
-      padding: 10px 16px;
-      font-size: 16px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #0056b3;
-    }
-      #explanation-box {
-      max-width: 800px;
-      background: #ffffff;
-      padding: 20px;
-      border-radius: 10px;
-      margin: 25px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-      text-align: left;
-      line-height: 1.6;}
   </style>
 </head>
 
 <body>
-  <header>
-    <h2>3D Model: {{ molecule|capitalize }}</h2>
-    <div id="formula-display">
-      Formula: <strong id="formula-text">Loading...</strong>
-    </div>
-      <div id="explanation-box">
-    <h3>About {{ molecule|capitalize }}</h3>
-    <p>{{ explanation }}</p>
+  <div class="topbar">
+    <a class="back" href="/">← Home</a>
+    <span class="brand">🧪 3D Molecule Visualizer</span>
+    <a class="back" href="/quiz">🎯 Quiz</a>
+    <a class="back" id="compare-link" href="/compare">⚖️ Compare</a>
+    <form class="search" id="jump-form" autocomplete="off">
+      <input type="text" id="jump" list="all-mols" placeholder="Search molecule…">
+      <button class="btn" type="submit">Go</button>
+      <button class="btn" type="button" id="random-btn" title="Random molecule">🎲</button>
+    </form>
+    <datalist id="all-mols">{% for m in molecules %}<option value="{{ m }}">{% endfor %}</datalist>
   </div>
-  <div style="margin-top: 20px;">
-  <button onclick="speakExplanation()">🔊 Speak Explanation</button>
-</div>
 
-  </header>
+  <div class="layout">
+    <div class="stage" id="stage">
+      <div id="viewer-box"></div>
+      <div id="tip"></div>
+      <div class="toolbar">
+        <select id="style-sel" title="Style">
+          <option value="bs">Ball &amp; stick</option>
+          <option value="stick">Stick</option>
+          <option value="sphere">Space-filling</option>
+          <option value="line">Wireframe</option>
+        </select>
+        <select id="label-sel" title="Labels">
+          <option value="off">Labels: off</option>
+          <option value="sym">Symbols</option>
+          <option value="symnoh">Symbols (no H)</option>
+          <option value="name">Element names</option>
+        </select>
+        <select id="bond-sel" title="Bond notation">
+          <option value="off">Bonds: off</option>
+          <option value="order">Bonds: – = ≡</option>
+          <option value="pair">Bonds: C=O, C–H…</option>
+        </select>
+        <button class="tbtn on" id="title-btn" type="button">🏷 Name</button>
+        <button class="tbtn on" id="spin-btn" type="button">⟳ Rotate</button>
+        <button class="tbtn" id="vib-btn" type="button">〰 Vibrate</button>
+        <button class="tbtn" id="bg-btn" type="button">☀ Background</button>
+        <button class="tbtn" id="reset-btn" type="button">⌖ Reset view</button>
+        <button class="tbtn" id="shot-btn" type="button">📷 Screenshot</button>
+        <button class="tbtn" id="full-btn" type="button">⛶ Fullscreen</button>
+      </div>
+      <div class="hint">Drag to rotate · scroll to zoom · hover an atom for its name</div>
+    </div>
 
-  <!-- 3D viewer with animation enabled -->
-  <model-viewer
-    id="molviewer"
-    src="/outputs/{{ molecule }}.glb"
-    alt="{{ molecule }}"
-    ar
-    auto-rotate
-    autoplay
-    animation-name="Scene"
-    camera-controls
-    touch-action="pan-y"
-    environment-image="neutral"
-    shadow-intensity="1"
-    background-color="#fff">
-  </model-viewer>
-<!-- Add this inside <body>, preferably below the model-viewer -->
-<div style="margin-top: 20px;">
-  <a href="/outputs/{{ molecule }}.glb" download>
-    <button style="padding: 10px 20px; font-size: 16px;">⬇️ Download 3D Model (.glb)</button>
-  </a>
-</div>
+    <aside class="side">
+      <div class="panel">
+        <h1>{{ molecule }}</h1>
+        <span class="formula" id="formula"></span>
+        <div class="stats">
+          <div class="stat"><b id="st-mass"></b><span>g/mol</span></div>
+          <div class="stat"><b id="st-atoms"></b><span>atoms</span></div>
+          <div class="stat"><b id="st-bonds"></b><span>bonds</span></div>
+        </div>
+      </div>
 
-  <!-- Animation toggle button -->
+      <div class="panel">
+        <h2>Elements</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+
+      <div class="panel">
+        <h2>About</h2>
+        <p id="explanation"></p>
+        <div class="row speech" id="speech-row">
+          <button class="btn primary" id="speak-btn" type="button">🔊 Speak</button>
+          <button class="btn" id="pause-btn" type="button" disabled>⏸ Pause</button>
+          <select id="voice-sel" title="Voice"></select>
+          <label>Speed <input type="range" id="rate" min="0.6" max="1.6" step="0.1" value="1"></label>
+        </div>
+        <p class="hint" id="speech-note" style="position:static;margin:8px 0 0"></p>
+      </div>
+
+      <div class="panel">
+        <h2>Ask the AI teacher</h2>
+        <div class="chips" id="q-chips">
+          <span class="chip">Where is it found?</span>
+          <span class="chip">Is it dangerous?</span>
+          <span class="chip">How is it made?</span>
+          <span class="chip">Why is its shape like this?</span>
+        </div>
+        <form class="ask" id="ask-form" autocomplete="off">
+          <input type="text" id="question" maxlength="300" placeholder="Ask about this molecule…">
+          <button class="btn primary" type="submit" id="ask-btn">Ask</button>
+        </form>
+        <p id="answer"></p>
+        <button class="btn" id="speak-answer" type="button" style="display:none;margin-top:8px">🔊 Read answer</button>
+      </div>
+
+      <div class="panel">
+        <h2>Download</h2>
+        <div class="row">
+          {% if has_glb %}<a class="btn" href="/outputs/{{ molecule | urlencode }}.glb" download>⬇ .glb (3D / AR)</a>{% endif %}
+          <button class="btn" id="dl-sdf" type="button">⬇ .sdf</button>
+        </div>
+      </div>
+    </aside>
+  </div>
 
   <script>
-    const molecule = "{{ molecule }}".toLowerCase();
-    const formulaMap = {
-      "water": "H2O", "methane": "CH4", "ethane": "C2H6", "propane": "C3H8", "butane": "C4H10",
-      "pentane": "C5H12", "hexane": "C6H14", "ethene": "C2H4", "ethyne": "C2H2", "benzene": "C6H6",
-      "methanol": "CH3OH", "ethanol": "C2H5OH", "propanol": "C3H7OH", "butanol": "C4H9OH",
-      "isopropanol": "C3H8O", "glycerol": "C3H8O3", "formic acid": "HCOOH", "acetic acid": "CH3COOH",
-      "propanoic acid": "C2H5COOH", "butanoic acid": "C3H7COOH", "benzoic acid": "C6H5COOH",
-      "methylamine": "CH3NH2", "ethylamine": "C2H5NH2", "aniline": "C6H5NH2", "formaldehyde": "CH2O",
-      "acetaldehyde": "CH3CHO", "acetone": "C3H6O", "glucose": "C6H12O6", "fructose": "C6H12O6",
-      "sucrose": "C12H22O11", "glycine": "C2H5NO2", "alanine": "C3H7NO2", "valine": "C5H11NO2",
-      "leucine": "C6H13NO2", "phenylalanine": "C9H11NO2", "tryptophan": "C11H12N2O2",
-      "ammonia": "NH3", "carbon dioxide": "CO2", "nitric acid": "HNO3", "sulfuric acid": "H2SO4",
-      "phosphoric acid": "H3PO4", "hydrogen peroxide": "H2O2", "ozone": "O3", "adenine": "C5H5N5",
-      "guanine": "C5H5N5O", "cytosine": "C4H5N3O", "uracil": "C4H4N2O2", "thymine": "C5H6N2O2",
-      "cholesterol": "C27H46O", "caffeine": "C8H10N4O2", "nicotine": "C10H14N2", "oxygen": "O2",
-      "hydrogen": "H2", "nitrogen": "N2", "chlorine": "Cl2", "fluorine": "F2",
-      "aspirin": "C9H8O4", "paracetamol": "C8H9NO2", "acetylsalicylic acid": "C9H8O4"
-    };
+    const NAME = {{ molecule | tojson }};
+    const MOL = {{ info | tojson }};
+    const EXPLANATION = {{ explanation | tojson }};
+    const $ = id => document.getElementById(id);
 
-    function formatFormula(formula) {
-      return formula.replace(/([0-9]+)/g, "<sub>$1</sub>");
-    }
+    // ---------- facts panel
+    $("formula").innerHTML = molSubscript ? MOL.formula.replace(/(\d+)/g, "<sub>$1</sub>") : MOL.formula;
+    $("st-mass").textContent = MOL.mass;
+    $("st-atoms").textContent = MOL.atoms;
+    $("st-bonds").textContent = MOL.bonds;
+    $("compare-link").href = "/compare?a=" + encodeURIComponent(NAME);
 
-    const formula = formulaMap[molecule] || "Unknown";
-    document.getElementById("formula-text").innerHTML = formatFormula(formula);
+    const NAME_OF = {};
+    MOL.elements.forEach(e => {
+      NAME_OF[e.symbol] = e.name;
+      const row = document.createElement("div");
+      row.className = "lrow";
+      row.innerHTML = '<span class="dot"></span><span></span><span class="cnt"></span>';
+      row.children[0].style.background = MOL.colors[e.symbol] || MOL.unknown_color;
+      row.children[1].textContent = e.name + " (" + e.symbol + ")";
+      row.children[2].textContent = "× " + e.count;
+      $("legend").appendChild(row);
+    });
 
-    // Animation toggle
-    const viewer = document.getElementById('molviewer');
-    let playing = true;
+    // ---------- 3D viewer
+    let dark = true, vibrating = false, framesSDF = null;
+    const mv = new MolView($("viewer-box"), {
+      colors: MOL.colors, names: NAME_OF, title: MOL.title, formula: MOL.formula,
+      smiles: MOL.smiles, tip: $("tip"), tipBox: $("stage"), showTitle: true,
+    });
+    mv.load(MOL.molblock);
 
-    function toggleAnimation() {
-      playing = !playing;
-      if (playing) {
-        viewer.play();
-      } else {
-        viewer.pause();
+    // optional starting view from the URL, e.g. ?style=stick&labels=sym&bonds=pair&bg=light&spin=0
+    (function applyUrlOptions() {
+      const q = new URLSearchParams(location.search);
+      const pick = (id, key, apply) => {
+        const sel = $(id), v = q.get(key);
+        if (v && [...sel.options].some(o => o.value === v)) { sel.value = v; apply(v); }
+      };
+      pick("style-sel", "style", v => mv.setStyle(v));
+      pick("label-sel", "labels", v => mv.setAtomLabels(v));
+      pick("bond-sel", "bonds", v => mv.setBondLabels(v));
+      if (q.get("bg") === "light") { dark = false; mv.setDark(false); }
+      if (q.get("spin") === "0") { mv.spin(false); $("spin-btn").classList.remove("on"); }
+      if (q.get("name") === "0") { mv.setTitleVisible(false); $("title-btn").classList.remove("on"); }
+    })();
+
+    $("style-sel").addEventListener("change", e => mv.setStyle(e.target.value));
+    $("label-sel").addEventListener("change", e => mv.setAtomLabels(e.target.value));
+    $("bond-sel").addEventListener("change", e => mv.setBondLabels(e.target.value));
+    $("title-btn").addEventListener("click", e => {
+      const on = !mv.showTitle; mv.setTitleVisible(on); e.currentTarget.classList.toggle("on", on);
+    });
+    $("spin-btn").addEventListener("click", e => {
+      const on = !mv.spinning; mv.spin(on); e.currentTarget.classList.toggle("on", on);
+    });
+    $("vib-btn").addEventListener("click", async e => {
+      vibrating = !vibrating;
+      e.currentTarget.classList.toggle("on", vibrating);
+      if (!vibrating) { mv.load(); return; }
+      if (!framesSDF) {
+        const res = await fetch("/api/frames/" + encodeURIComponent(NAME));
+        framesSDF = (await res.json()).sdf;
       }
+      mv.loadFrames(framesSDF);
+    });
+    $("bg-btn").addEventListener("click", () => { dark = !dark; mv.setDark(dark); });
+    $("reset-btn").addEventListener("click", () => mv.reset());
+    $("shot-btn").addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = mv.png(); a.download = NAME + ".png"; a.click();
+    });
+    $("full-btn").addEventListener("click", () => {
+      document.fullscreenElement ? document.exitFullscreen() : $("stage").requestFullscreen();
+    });
+    document.addEventListener("fullscreenchange", () => setTimeout(() => mv.resize(), 100));
+    window.addEventListener("resize", () => mv.resize());
+
+    $("dl-sdf").addEventListener("click", () => {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([MOL.molblock], { type: "chemical/x-mdl-sdfile" }));
+      a.download = NAME + ".sdf"; a.click();
+    });
+
+    // ---------- search / random
+    $("jump-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const v = $("jump").value.trim().toLowerCase();
+      if (v) location.href = "/viewer/" + encodeURIComponent(v);
+    });
+    $("random-btn").addEventListener("click", () => {
+      const opts = [...$("all-mols").options].map(o => o.value).filter(v => v !== NAME);
+      location.href = "/viewer/" + encodeURIComponent(opts[Math.floor(Math.random() * opts.length)]);
+    });
+
+    // ---------- speech (sentence by sentence; long single utterances get cut off in Chrome)
+    const synth = window.speechSynthesis;
+    const speakBtn = $("speak-btn"), pauseBtn = $("pause-btn");
+    let speakToken = 0, activeBtn = null, activeSpans = [];
+
+    function splitSentences(text) {
+      return (text.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [text]).map(s => s.trim()).filter(Boolean);
+    }
+    // render explanation as clickable-highlightable sentences (textContent => safe)
+    const mainSentences = splitSentences(EXPLANATION);
+    mainSentences.forEach((s, i) => {
+      const span = document.createElement("span");
+      span.className = "s"; span.textContent = s + (i < mainSentences.length - 1 ? " " : "");
+      $("explanation").appendChild(span);
+    });
+    const mainSpans = [...document.querySelectorAll("#explanation .s")];
+
+    function fillVoices() {
+      const voices = synth.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith("en"));
+      const sel = $("voice-sel"), prev = sel.value;
+      sel.innerHTML = "";
+      (voices.length ? voices : synth.getVoices()).forEach(v => {
+        const o = document.createElement("option");
+        o.value = v.name; o.textContent = v.name.replace(/Microsoft |Google /, "") + " (" + v.lang + ")";
+        sel.appendChild(o);
+      });
+      if (prev) sel.value = prev;
     }
 
-  function speakExplanation() {
-    const text = `{{ explanation | safe }}`;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.9; // slower rate for clarity
-    utterance.pitch = 1;
-    utterance.lang = 'en-US';
-    speechSynthesis.speak(utterance);
-  }
+    function stopSpeech() {
+      speakToken++;
+      synth.cancel();
+      mainSpans.forEach(s => s.classList.remove("now"));
+      speakBtn.textContent = "🔊 Speak"; $("speak-answer").textContent = "🔊 Read answer";
+      pauseBtn.disabled = true; pauseBtn.textContent = "⏸ Pause";
+      activeBtn = null;
+    }
 
+    function speak(sentences, spans, btn) {
+      if (activeBtn === btn) { stopSpeech(); return; }
+      stopSpeech();
+      $("speech-note").textContent = "";
+      const token = ++speakToken;
+      activeBtn = btn; btn.textContent = "⏹ Stop"; pauseBtn.disabled = false;
+      const voice = synth.getVoices().find(v => v.name === $("voice-sel").value);
+      let i = 0;
+      const next = () => {
+        if (token !== speakToken) return;
+        if (i >= sentences.length) { stopSpeech(); return; }
+        mainSpans.forEach(s => s.classList.remove("now"));
+        if (spans && spans[i]) spans[i].classList.add("now");
+        const u = new SpeechSynthesisUtterance(sentences[i++]);
+        if (voice) { u.voice = voice; u.lang = voice.lang; } else { u.lang = "en-US"; }
+        u.rate = parseFloat($("rate").value);
+        u.onend = next;
+        u.onerror = ev => {
+          if (ev.error === "canceled" || ev.error === "interrupted") return;
+          if (token !== speakToken) return;
+          stopSpeech();   // a hard failure: tell the user instead of silently skipping ahead
+          $("speech-note").textContent = ev.error === "not-allowed"
+            ? "Your browser blocked speech. Click the Speak button again."
+            : "Speech failed (" + ev.error + "). Try another voice from the list.";
+        };
+        synth.speak(u);
+      };
+      next();
+    }
 
+    if (!synth) {
+      $("speech-row").querySelectorAll("button,select,input").forEach(el => el.disabled = true);
+      $("speech-note").textContent = "Speech is not supported in this browser.";
+    } else {
+      fillVoices();
+      synth.onvoiceschanged = fillVoices;
+      speakBtn.addEventListener("click", () => speak(mainSentences, mainSpans, speakBtn));
+      pauseBtn.addEventListener("click", () => {
+        if (synth.paused) { synth.resume(); pauseBtn.textContent = "⏸ Pause"; }
+        else { synth.pause(); pauseBtn.textContent = "▶ Resume"; }
+      });
+      $("speak-answer").addEventListener("click", e =>
+        speak(splitSentences($("answer").textContent), null, e.currentTarget));
+      window.addEventListener("beforeunload", () => synth.cancel());
+      setTimeout(() => { if (!synth.getVoices().length)
+        $("speech-note").textContent = "No voices found in this browser. Install a system voice or try Chrome/Edge."; }, 1500);
+    }
+
+    // ---------- Ask the AI
+    async function ask(q) {
+      const out = $("answer"), btn = $("ask-btn");
+      if (!q.trim()) return;
+      stopSpeech();
+      out.className = ""; out.textContent = "Thinking…"; btn.disabled = true;
+      $("speak-answer").style.display = "none";
+      try {
+        const res = await fetch("/api/ask", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ molecule: NAME, question: q }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Request failed.");
+        out.textContent = data.answer;
+        if (synth) $("speak-answer").style.display = "inline-flex";
+      } catch (err) {
+        out.className = "err"; out.textContent = err.message;
+      } finally { btn.disabled = false; }
+    }
+    $("ask-form").addEventListener("submit", e => { e.preventDefault(); ask($("question").value); });
+    $("q-chips").addEventListener("click", e => {
+      if (e.target.classList.contains("chip")) { $("question").value = e.target.textContent; ask(e.target.textContent); }
+    });
   </script>
 </body>
 </html>

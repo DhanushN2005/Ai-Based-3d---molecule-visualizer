@@ -1,14 +1,9 @@
+from elements import rgba_color
+
+
 def element_color(el):
-    colors = {
-        'H': (1, 1, 1, 1),
-        'C': (0.2, 0.2, 0.2, 1),
-        'O': (1, 0, 0, 1),
-        'N': (0, 0, 1, 1),
-        'S': (1, 1, 0, 1),
-        'Cl': (0, 1, 0, 1),
-        'F': (0.5, 1, 0.5, 1)
-    }
-    return colors.get(el, (0.5, 0.5, 0.5, 1))
+    return rgba_color(el)
+
 
 def generate_blender_py(mol, name):
     """Write a Blender script from an RDKit mol that already has a 3D conformer.

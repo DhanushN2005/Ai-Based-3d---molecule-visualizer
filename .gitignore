@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 venv/
-models/
-static/
 .env
+molecules/
+outputs/
+data/

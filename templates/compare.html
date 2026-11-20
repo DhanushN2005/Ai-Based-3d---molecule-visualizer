@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Compare molecules · 3D Molecule Visualizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
+  <style>
+    :root { --bg:#0b1220; --panel:#131c31; --border:rgba(255,255,255,.1); --text:#f1f5f9;
+            --muted:#94a3b8; --accent:#5eead4; --accent-2:#38bdf8; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); background:var(--bg);
+           font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+    .topbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 24px;
+              border-bottom:1px solid var(--border); }
+    .topbar a { color:var(--muted); text-decoration:none; }
+    .topbar a:hover { color:var(--accent); }
+    .brand { font-weight:600; margin-right:auto; }
+    main { max-width:1400px; margin:0 auto; padding:24px; }
+    form.pick { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:center; margin-bottom:20px; }
+    input[type=text], select { padding:10px 14px; font-size:.95rem; color:var(--text);
+      background:rgba(255,255,255,.07); border:1px solid var(--border); border-radius:10px; outline:none; min-width:0; }
+    input[type=text] { width:230px; }
+    input:focus, select:focus { border-color:var(--accent); }
+    select option { color:#111; }
+    .btn { padding:10px 16px; font-size:.95rem; font-weight:600; color:var(--text); cursor:pointer;
+           background:rgba(255,255,255,.08); border:1px solid var(--border); border-radius:10px; }
+    .btn:hover { background:rgba(255,255,255,.15); }
+    .btn.primary { color:#04211d; border:none; background:linear-gradient(90deg,var(--accent),var(--accent-2)); }
+    .vs { color:var(--muted); font-weight:700; }
+    .err { text-align:center; color:#fca5a5; margin:0 0 16px; }
+    .empty { text-align:center; color:var(--muted); padding:60px 0; }
+    .tools { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:14px; }
+    .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+    .card h2 { margin:0; padding:14px 18px 0; font-size:1.3rem; text-transform:capitalize; }
+    .card .f { padding:2px 18px 10px; color:var(--accent); font-weight:600; }
+    .view { position:relative; height:52vh; min-height:340px; }
+    .view > div { position:absolute; inset:0; }
+    table { width:100%; border-collapse:collapse; margin-top:20px; background:var(--panel);
+            border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+    th, td { padding:11px 16px; text-align:center; border-bottom:1px solid var(--border); }
+    th:first-child, td:first-child { text-align:left; color:var(--muted); }
+    tr:last-child td { border-bottom:none; }
+    td.diff { color:#fde047; font-weight:700; }
+    .panel { margin-top:20px; padding:18px; background:var(--panel); border:1px solid var(--border); border-radius:16px; }
+    .panel h3 { margin:0 0 8px; font-size:.8rem; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
+    #ai { margin:0; line-height:1.75; color:#e2e8f0; white-space:pre-wrap; }
+    @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:14px; } }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/">← Home</a>
+    <span class="brand">🧪 3D Molecule Visualizer</span>
+    <a href="/quiz">🎯 Quiz</a>
+  </div>
+
+  <main>
+    <form class="pick" method="get" action="/compare" autocomplete="off">
+      <input type="text" name="a" id="a" list="mols" placeholder="First molecule" value="{{ a.name if a else request.args.get('a','') }}" required>
+      <span class="vs">vs</span>
+      <input type="text" name="b" id="b" list="mols" placeholder="Second molecule" value="{{ b.name if b else request.args.get('b','') }}" required>
+      <button class="btn primary" type="submit">Compare</button>
+      <button class="btn" type="button" id="swap" title="Swap">⇄</button>
+    </form>
+    <datalist id="mols">{% for m in molecules %}<option value="{{ m }}">{% endfor %}</datalist>
+    <p class="empty" style="padding:0;margin:-8px 0 14px;font-size:.85rem">Built-in names work offline. Any other name is looked up on PubChem.</p>
+
+    {% if error %}<p class="err">{{ error }}</p>{% endif %}
+
+    {% if a and b %}
+    <div class="tools">
+      <select id="style-sel"><option value="bs">Ball &amp; stick</option><option value="stick">Stick</option>
+        <option value="sphere">Space-filling</option><option value="line">Wireframe</option></select>
+      <select id="label-sel"><option value="off">Labels: off</option><option value="sym">Symbols</option>
+        <option value="symnoh">Symbols (no H)</option><option value="name">Element names</option></select>
+      <select id="bond-sel"><option value="off">Bonds: off</option><option value="order">Bonds: – = ≡</option>
+        <option value="pair">Bonds: C=O, C–H…</option></select>
+      <button class="btn" id="spin-btn" type="button">⏸ Stop rotation</button>
+    </div>
+
+    <div class="grid">
+      <div class="card"><h2>{{ a.title }}</h2><div class="f" id="fa"></div><div class="view"><div id="va"></div></div></div>
+      <div class="card"><h2>{{ b.title }}</h2><div class="f" id="fb"></div><div class="view"><div id="vb"></div></div></div>
+    </div>
+
+    <table id="facts"></table>
+
+    <div class="panel">
+      <h3>AI comparison</h3>
+      <p id="ai">Thinking…</p>
+    </div>
+    {% elif not error %}
+    <p class="empty">Pick two molecules above to see them side by side.</p>
+    {% endif %}
+  </main>
+
+  {% if a and b %}
+  <script>
+    const A = {{ a | tojson }}, B = {{ b | tojson }};
+    const $ = id => document.getElementById(id);
+    const subf = f => f.replace(/(\d+)/g, "<sub>$1</sub>");
+    $("fa").innerHTML = subf(A.formula);
+    $("fb").innerHTML = subf(B.formula);
+
+    function make(el, info) {
+      const names = {}; info.elements.forEach(e => names[e.symbol] = e.name);
+      const mv = new MolView(el, { colors: info.colors, names, title: info.title,
+                                   formula: info.formula, smiles: info.smiles, showTitle: false });
+      mv.load(info.molblock);
+      return mv;
+    }
+    const views = [make($("va"), A), make($("vb"), B)];
+    const all = fn => views.forEach(fn);
+    $("style-sel").addEventListener("change", e => all(v => v.setStyle(e.target.value)));
+    $("label-sel").addEventListener("change", e => all(v => v.setAtomLabels(e.target.value)));
+    $("bond-sel").addEventListener("change", e => all(v => v.setBondLabels(e.target.value)));
+    $("spin-btn").addEventListener("click", e => {
+      const on = !views[0].spinning; all(v => v.spin(on));
+      e.currentTarget.textContent = on ? "⏸ Stop rotation" : "▶ Rotate";
+    });
+    window.addEventListener("resize", () => all(v => v.resize()));
+    $("swap").addEventListener("click", () => { const t = $("a").value; $("a").value = $("b").value; $("b").value = t; });
+
+    // facts table (differences highlighted)
+    const count = (i, s) => (i.elements.find(e => e.symbol === s) || { count: 0 }).count;
+    const syms = [...new Set([...A.elements, ...B.elements].map(e => e.symbol))];
+    const rows = [
+      ["Formula", subf(A.formula), subf(B.formula), A.formula !== B.formula],
+      ["Molar mass (g/mol)", A.mass, B.mass, A.mass !== B.mass],
+      ["Atoms", A.atoms, B.atoms, A.atoms !== B.atoms],
+      ["Heavy atoms (non-H)", A.heavy_atoms, B.heavy_atoms, A.heavy_atoms !== B.heavy_atoms],
+      ["Bonds", A.bonds, B.bonds, A.bonds !== B.bonds],
+    ].concat(syms.map(s => {
+      const name = (A.elements.concat(B.elements).find(e => e.symbol === s) || {}).name || s;
+      return [name + " atoms", count(A, s), count(B, s), count(A, s) !== count(B, s)];
+    }));
+    $("facts").innerHTML = "<tr><th></th><th>" + A.title + "</th><th>" + B.title + "</th></tr>" +
+      rows.map(r => "<tr><td>" + r[0] + "</td><td class='" + (r[3] ? "diff" : "") + "'>" + r[1] +
+        "</td><td class='" + (r[3] ? "diff" : "") + "'>" + r[2] + "</td></tr>").join("");
+
+    // AI comparison
+    fetch("/api/compare", { method: "POST", headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ a: A.name, b: B.name }) })
+      .then(r => r.json().then(d => ({ ok: r.ok, d })))
+      .then(({ ok, d }) => { $("ai").textContent = ok ? d.answer : (d.error || "Unavailable."); })
+      .catch(() => { $("ai").textContent = "Could not load the AI comparison."; });
+  </script>
+  {% endif %}
+</body>
+</html>

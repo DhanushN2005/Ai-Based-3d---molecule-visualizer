@@ -16,7 +16,9 @@ def build_molecule(smiles: str, name: str = ""):
 
     mol = Chem.AddHs(mol)
     if AllChem.EmbedMolecule(mol, randomSeed=42) != 0:
-        raise RuntimeError("Embedding failed for molecule: " + name)
+        # Rings, metals and odd valences sometimes need random starting coordinates.
+        if AllChem.EmbedMolecule(mol, randomSeed=42, useRandomCoords=True) != 0:
+            raise RuntimeError("Could not build a 3D structure for: " + name)
 
     # Returns 0 if converged, 1 if more iterations needed, -1 if no force field
     # parameters. Atoms like O3 or F2 may lack UFF terms; that's not fatal.

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quiz · 3D Molecule Visualizer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
+  <style>
+    :root { --bg:#0b1220; --panel:#131c31; --border:rgba(255,255,255,.1); --text:#f1f5f9;
+            --muted:#94a3b8; --accent:#5eead4; --accent-2:#38bdf8; --good:#34d399; --bad:#f87171; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); background:var(--bg);
+           font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+    .topbar { display:flex; align-items:center; gap:14px; padding:12px 24px; border-bottom:1px solid var(--border); }
+    .topbar a { color:var(--muted); text-decoration:none; }
+    .topbar a:hover { color:var(--accent); }
+    .brand { font-weight:600; margin-right:auto; }
+    main { max-width:760px; margin:0 auto; padding:24px; }
+    .card { background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:26px; }
+    h1 { margin:0 0 6px; font-size:1.7rem; }
+    .muted { color:var(--muted); }
+    .btn { padding:12px 20px; font-size:1rem; font-weight:600; color:var(--text); cursor:pointer;
+           background:rgba(255,255,255,.08); border:1px solid var(--border); border-radius:12px; }
+    .btn:hover:not(:disabled) { background:rgba(255,255,255,.15); }
+    .btn.primary { color:#04211d; border:none; background:linear-gradient(90deg,var(--accent),var(--accent-2)); }
+    .center { text-align:center; }
+    .bar { height:8px; border-radius:99px; background:rgba(255,255,255,.1); overflow:hidden; margin:6px 0 18px; }
+    .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent-2)); transition:width .3s; }
+    .meta { display:flex; justify-content:space-between; font-size:.85rem; color:var(--muted); }
+    #q-text { font-size:1.25rem; margin:4px 0 14px; }
+    #q-view { position:relative; height:300px; margin-bottom:16px; border-radius:14px; overflow:hidden;
+              border:1px solid var(--border); background:#0b1220; display:none; }
+    #q-view > div { position:absolute; inset:0; }
+    .opts { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .opt { padding:14px; font-size:1rem; text-align:center; color:var(--text); cursor:pointer;
+           background:rgba(255,255,255,.06); border:1px solid var(--border); border-radius:12px; text-transform:none; }
+    .opt:hover:not(:disabled) { border-color:var(--accent); background:rgba(94,234,212,.1); }
+    .opt.good { background:rgba(52,211,153,.22); border-color:var(--good); }
+    .opt.bad { background:rgba(248,113,113,.22); border-color:var(--bad); }
+    .opt:disabled { cursor:default; }
+    #feedback { min-height:48px; margin-top:14px; }
+    #feedback b.good { color:var(--good); } #feedback b.bad { color:var(--bad); }
+    .big { font-size:3rem; font-weight:800; margin:6px 0; background:linear-gradient(90deg,var(--accent),var(--accent-2));
+           -webkit-background-clip:text; background-clip:text; color:transparent; }
+    ul.review { text-align:left; padding-left:18px; line-height:1.7; }
+    .hide { display:none !important; }
+    @media (max-width:560px) { .opts { grid-template-columns:1fr; } main { padding:14px; } }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/">← Home</a>
+    <span class="brand">🧪 3D Molecule Visualizer</span>
+    <a href="/compare">⚖️ Compare</a>
+  </div>
+
+  <main>
+    <section class="card center" id="start">
+      <div style="font-size:42px">🎯</div>
+      <h1>Molecule Quiz</h1>
+      <p class="muted">10 questions: identify molecules in 3D, recall formulas and count atoms.</p>
+      <p class="muted" id="best"></p>
+      <button class="btn primary" id="start-btn">Start quiz</button>
+      <p class="muted" id="start-err" style="color:#fca5a5"></p>
+    </section>
+
+    <section class="card hide" id="play">
+      <div class="meta"><span id="progress"></span><span id="score"></span><span id="streak"></span></div>
+      <div class="bar"><i id="bar"></i></div>
+      <div id="q-text"></div>
+      <div id="q-view"><div id="q-canvas"></div></div>
+      <div class="opts" id="opts"></div>
+      <div id="feedback" aria-live="polite"></div>
+      <div class="center"><button class="btn primary hide" id="next-btn">Next →</button></div>
+    </section>
+
+    <section class="card center hide" id="end">
+      <div class="muted">Your score</div>
+      <div class="big" id="final"></div>
+      <p id="verdict"></p>
+      <ul class="review" id="review"></ul>
+      <button class="btn primary" id="again">Play again</button>
+    </section>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const sub = s => String(s).replace(/(\d+)/g, "<sub>$1</sub>");
+    const isFormula = t => t === "formula";
+
+    // best score is only a convenience, so storage failures are ignored
+    const store = {
+      get() { try { return parseInt(localStorage.getItem("quizBest") || "0", 10) || 0; } catch (_) { return 0; } },
+      set(v) { try { localStorage.setItem("quizBest", String(v)); } catch (_) {} },
+    };
+    function showBest() {
+      const b = store.get();
+      $("best").textContent = b ? "Best score: " + b + " / 10" : "";
+    }
+    showBest();
+
+    let questions = [], idx = 0, score = 0, streak = 0, missed = [], view = null;
+
+    function show(id) { ["start", "play", "end"].forEach(s => $(s).classList.toggle("hide", s !== id)); }
+
+    $("start-btn").addEventListener("click", begin);
+    $("again").addEventListener("click", begin);
+
+    async function begin() {
+      $("start-err").textContent = "";
+      $("start-btn").disabled = true;
+      try {
+        const res = await fetch("/api/quiz?n=10");
+        if (!res.ok) throw new Error("Could not load questions (" + res.status + ").");
+        questions = (await res.json()).questions;
+      } catch (e) {
+        $("start-err").textContent = e.message; $("start-btn").disabled = false; show("start"); return;
+      }
+      $("start-btn").disabled = false;
+      idx = 0; score = 0; streak = 0; missed = [];
+      show("play"); ask();
+    }
+
+    function ask() {
+      const q = questions[idx];
+      $("progress").textContent = "Question " + (idx + 1) + " / " + questions.length;
+      $("score").textContent = "Score " + score;
+      $("streak").textContent = streak > 1 ? "🔥 " + streak + " in a row" : "";
+      $("bar").style.width = (idx / questions.length * 100) + "%";
+      $("q-text").textContent = q.text;
+      $("feedback").innerHTML = "";
+      $("next-btn").classList.add("hide");
+
+      const holder = $("q-view");
+      if (q.molblock) {
+        holder.style.display = "block";
+        $("q-canvas").innerHTML = "";
+        view = new MolView($("q-canvas"), { colors: q.colors || {}, showTitle: false });
+        view.load(q.molblock);
+      } else {
+        holder.style.display = "none"; view = null;
+      }
+
+      const box = $("opts"); box.innerHTML = "";
+      q.options.forEach((o, i) => {
+        const b = document.createElement("button");
+        b.className = "opt"; b.type = "button";
+        if (isFormula(q.type)) b.innerHTML = sub(o); else b.textContent = o;
+        b.addEventListener("click", () => answer(i));
+        box.appendChild(b);
+      });
+    }
+
+    function answer(i) {
+      const q = questions[idx], btns = [...$("opts").children];
+      btns.forEach(b => b.disabled = true);
+      btns[q.answer].classList.add("good");
+      if (i === q.answer) {
+        score++; streak++;
+        $("feedback").innerHTML = "<b class='good'>Correct!</b> " + sub(q.explain);
+      } else {
+        streak = 0; btns[i].classList.add("bad");
+        missed.push(q);
+        $("feedback").innerHTML = "<b class='bad'>Not quite.</b> " + sub(q.explain) +
+          " Correct answer: <b>" + (isFormula(q.type) ? sub(q.options[q.answer]) : q.options[q.answer]) + "</b>";
+      }
+      $("score").textContent = "Score " + score;
+      $("streak").textContent = streak > 1 ? "🔥 " + streak + " in a row" : "";
+      $("bar").style.width = ((idx + 1) / questions.length * 100) + "%";
+      const next = $("next-btn");
+      next.textContent = idx + 1 < questions.length ? "Next →" : "See results";
+      next.classList.remove("hide");
+      next.focus();
+    }
+
+    $("next-btn").addEventListener("click", () => {
+      idx++;
+      idx < questions.length ? ask() : finish();
+    });
+
+    function finish() {
+      show("end");
+      const total = questions.length;
+      $("final").textContent = score + " / " + total;
+      const ratio = score / total;
+      $("verdict").textContent = ratio === 1 ? "Perfect! 🏆" : ratio >= 0.7 ? "Great job! 🎉"
+        : ratio >= 0.4 ? "Good start, keep practising." : "Review the molecules and try again.";
+      if (score > store.get()) { store.set(score); $("verdict").textContent += " New best score!"; }
+      const list = $("review"); list.innerHTML = "";
+      missed.forEach(q => {
+        const li = document.createElement("li");
+        li.innerHTML = sub(q.explain) + " (" + q.text.replace(/</g, "&lt;") + ")";
+        list.appendChild(li);
+      });
+      if (!missed.length) { const li = document.createElement("li"); li.textContent = "No mistakes to review."; list.appendChild(li); }
+      showBest();
+    }
+  </script>
+</body>
+</html>
