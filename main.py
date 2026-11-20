@@ -37,6 +37,13 @@ RDLogger.DisableLog("rdApp.*")  # PubChem SMILES can be noisy; errors are handle
 
 app = Flask(__name__)
 
+# Behind a host's proxy (Render, Hugging Face...) every request would look like it comes
+# from the proxy's IP, so the rate limiter would treat all users as one. Only enable this
+# when the app really sits behind one, otherwise clients could spoof X-Forwarded-For.
+if os.environ.get("TRUST_PROXY") == "1":
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
 molecule_db = MOLECULE_DB
 PT = Chem.GetPeriodicTable()
 MAX_HEAVY_ATOMS = int(os.environ.get("MAX_HEAVY_ATOMS", "80"))

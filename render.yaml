@@ -1,0 +1,22 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
+services:
+  - type: web
+    name: molecule-visualizer
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # One worker: the rate limiter and caches live in memory, so extra workers
+    # would each keep their own copy. Threads handle concurrent requests.
+    startCommand: gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: TRUST_PROXY
+        value: "1"
+      - key: GROQ_API_KEY
+        sync: false          # you paste the value in the Render dashboard; it is never stored in git
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-20b

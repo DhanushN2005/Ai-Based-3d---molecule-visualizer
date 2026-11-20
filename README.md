@@ -128,6 +128,7 @@ copy .env.example .env
 | `PORT` | No | `5000` | Port the server listens on. |
 | `FLASK_DEBUG` | No | `0` | `1` enables debug mode. Local development only. |
 | `MAX_HEAVY_ATOMS` | No | `80` | Largest PubChem molecule the app will build. |
+| `TRUST_PROXY` | No | off | Set to `1` only when deployed behind a proxy (Render, Hugging Face) so rate limits use each visitor's real IP. |
 
 `.env` is in `.gitignore`, so your key is never committed. On a hosting service, set these as environment variables or secrets instead of uploading `.env`.
 
@@ -171,6 +172,26 @@ If none exist, the app shows "Blender not found" with instructions.
 
 ### Debug mode
 Off by default. For local development only: set `FLASK_DEBUG=1` in `.env`.
+
+## Deploy free on Render
+
+The repo includes a `render.yaml` blueprint.
+
+1. Push the repo to GitHub. Never commit `.env`.
+2. On [render.com](https://render.com): **New → Blueprint**, choose this repo, and approve the plan (`free`).
+3. When asked, paste your `GROQ_API_KEY` (it is stored in Render, not in git).
+4. Wait for the build. Your app is at `https://molecule-visualizer.onrender.com` (or the name Render gives you).
+
+What the blueprint sets:
+- **Start command:** `gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT`. One worker on purpose: the rate limiter and caches live in memory.
+- **`TRUST_PROXY=1`** so rate limits work per visitor.
+- **Python 3.11.9** and a health check on `/`.
+
+Free-tier behaviour to expect (check Render's pricing page for current limits):
+- About 512 MB RAM. The app has no torch or Blender, so it should fit.
+- The service sleeps after about 15 minutes idle; the first visit then takes 30 to 60 seconds.
+- The disk resets on restart. That is fine: `.glb` files and the PubChem cache are rebuilt on demand.
+- gunicorn does not run on Windows. Use `python main.py` locally.
 
 ## Troubleshooting
 
