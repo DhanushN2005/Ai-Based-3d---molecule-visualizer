@@ -1,15 +1,15 @@
 # AI-Based 3D Molecule Visualizer 🎥🧪
 
-An AI-powered system for **visualizing chemical molecules in 3D**, converting molecular data into interactive 3D models and enabling **experiential science learning** through visualization and voice-based interaction.
+An AI-powered web app for **exploring chemical molecules in 3D**. Search any molecule, rotate it, read its structure notation, hear an AI explanation, compare it with another molecule, and test yourself with a quiz.
 
 ---
 
 ## 🚀 Project Overview
 
 Understanding molecular structures through textbooks is often abstract and difficult.  
-This project bridges that gap by generating **3D molecular models** from chemical data and enabling users to visualize, interact, and explore molecules in a more intuitive way.
+This project bridges that gap by building **3D molecular models** from chemical data (RDKit + PubChem) and letting users visualize, interact with, and explore them in a more intuitive way.
 
-The system integrates **Python automation, trimesh/Blender export, and basic web interfaces** to support molecule generation, visualization, and interaction.
+It is a Flask app: RDKit builds the 3D structure, 3Dmol.js draws it live in the browser, trimesh exports a `.glb` file, and Groq writes the explanations.
 
 ---
 
@@ -30,11 +30,12 @@ See [FEATURES.md](FEATURES.md) for the roadmap and what could come next.
 
 ## 🛠️ Tech Stack
 
-- **Programming Language:** Python  
-- **3D Tools:** trimesh (default), Blender scripting (fallback)  
-- **Web:** HTML, CSS (Templates)  
-- **AI / Logic:** Python-based processing  
-- **Automation:** Python GLB export  
+- **Backend:** Python, Flask
+- **Chemistry:** RDKit (3D structures, formula, mass), PubChem PUG REST (name lookup)
+- **3D:** 3Dmol.js (live viewer), trimesh (`.glb` export), Blender scripting (optional fallback)
+- **AI:** Groq API (explanations, Q&A, comparisons)
+- **Speech:** the browser's built-in Web Speech API
+- **Frontend:** plain HTML, CSS and JavaScript (no build step)
 
 > **Note:** Explanations use the free Groq API. You need a `GROQ_API_KEY`. See [Requirements](#requirements).
 
@@ -42,12 +43,13 @@ See [FEATURES.md](FEATURES.md) for the roadmap and what could come next.
 
 ## ⚙️ How it works
 
-This is a Flask web app. Type a molecule name (for example `caffeine`) and it:
+Type a molecule name (for example `caffeine` or `dopamine`) and the app:
 
-1. Looks up the molecule's SMILES string in `molecules_db.py`.
-2. Builds a 3D structure with **RDKit** (one conformer, used for both atoms and bonds).
-3. Builds a `.glb` model with **trimesh** (pure Python). If that fails, it falls back to a generated Blender script run in the background.
-4. Shows the model in the browser (`<model-viewer>`) with an AI-written explanation (**Groq** LLM) and a "Speak" button.
+1. Finds its SMILES string: first in `molecules_db.py`, otherwise on **PubChem** (cached in `data/pubchem_cache.json`).
+2. Builds a 3D structure with **RDKit** (one conformer, used for the viewer, the `.sdf` and the `.glb`).
+3. Sends the atoms and bonds to the browser, where **3Dmol.js** draws them with element colours, labels and bond notation.
+4. Builds a `.glb` model with **trimesh** for download and AR. If that fails, it falls back to a generated Blender script.
+5. Shows an AI-written explanation (**Groq**) with a "Speak" button and an "Ask the AI teacher" box.
 
 ---
 
@@ -63,15 +65,13 @@ This is a Flask web app. Type a molecule name (for example `caffeine`) and it:
 | `glb_trimesh.py` | Builds `outputs/<name>.glb` with trimesh (default) |
 | `blender_script_gen.py` | Fallback: writes `molecules/<name>_blender.py` (spheres for atoms, cylinders for bonds) |
 | `export_glb_blender.py` | Finds and runs Blender, which produces `outputs/<name>.glb` |
-| `templates/` | HTML pages (`index.html`, `viewer.html`) |
+| `templates/` | HTML pages: `index.html` (search), `viewer.html`, `compare.html`, `quiz.html`, `error.html` |
 
-Generated files go to `molecules/` and `outputs/`.
+Generated files go to `molecules/` (`.xyz`), `outputs/` (`.glb`) and `data/` (PubChem cache). All three are git-ignored. Roadmap: [FEATURES.md](FEATURES.md).
 
 <img width="330" height="341" alt="image" src="https://github.com/user-attachments/assets/a586da85-89af-420c-a1ab-99ee62739584" />
 
-**Sample output:**
-
-_(add a screenshot of the viewer here)_
+_Add a screenshot of the viewer here (use the 📷 Screenshot button)._
 
 ---
 
@@ -97,7 +97,7 @@ Built-in list:
 | Biological and drugs | cholesterol, caffeine, nicotine, aspirin, acetylsalicylic acid, paracetamol |
 | Gases | oxygen, hydrogen, nitrogen, chlorine, fluorine |
 
-**To add more:** add one line to `MOLECULE_DB` in `molecules_db.py` (`"name": "SMILES"`). Also add its formula to `formulaMap` in `templates/viewer.html`, or the page will show "Unknown" for the formula.
+**To add more built-in molecules:** add one line to `MOLECULE_DB` in `molecules_db.py` (`"name": "SMILES"`). The formula, mass and element counts are computed automatically. Anything not in the list is looked up on PubChem anyway, so this only matters for offline use and the quiz.
 
 ## Requirements
 
@@ -141,6 +141,25 @@ python main.py
 Open <http://127.0.0.1:5000>, type a molecule name and submit. Generation usually takes under a second.
 
 Always start the app from the project folder, because it uses relative paths such as `outputs/` and `molecules/`.
+
+## Using the app
+
+| Page | What you can do |
+|---|---|
+| **Home** (`/`) | Search a molecule (suggestions come from the built-in list and PubChem), or click a chip. |
+| **Viewer** (`/viewer/<name>`) | Rotate and zoom, switch style (ball and stick, stick, space-filling, wireframe), show atom labels (symbols or element names), show bond notation (`–` `=` `≡` or `C=O`, `C–H`), toggle the floating name, vibrate, change background, screenshot, fullscreen. Hover an atom for its element name. Read or hear the AI explanation, ask the AI a question, download `.glb` or `.sdf`. |
+| **Compare** (`/compare?a=water&b=ammonia`) | Two molecules side by side, differences highlighted in a table, plus an AI summary. |
+| **Quiz** (`/quiz`) | 10 questions: identify the molecule in 3D, pick the formula, count atoms. Your best score is saved in your browser. |
+
+The viewer can start in a given state through the URL, which is handy for sharing:
+`/viewer/caffeine?style=stick&labels=name&bonds=pair&bg=light&spin=0&name=0`
+(`style`: `bs` `stick` `sphere` `line`; `labels`: `off` `sym` `symnoh` `name`; `bonds`: `off` `order` `pair`).
+
+### Limits to know about
+- PubChem needs internet. The viewer loads 3Dmol.js from a CDN, so it needs internet and WebGL too.
+- The `.glb` file has no labels or animation. Those exist only in the live viewer and in screenshots.
+- AI calls and PubChem lookups are rate limited per IP (in memory, per process).
+- Quiz answers are checked in the browser, so use it for learning, not graded exams.
 
 ### Blender fallback (optional)
 If trimesh fails, the app looks for Blender in this order:
