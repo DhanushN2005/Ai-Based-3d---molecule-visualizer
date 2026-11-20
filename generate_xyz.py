@@ -1,7 +1,10 @@
+import logging
 import os
 
 from rdkit import Chem  # type: ignore
 from rdkit.Chem import AllChem  # type: ignore
+
+log = logging.getLogger("chemverse")
 
 
 def build_molecule(smiles: str, name: str = ""):
@@ -23,7 +26,7 @@ def build_molecule(smiles: str, name: str = ""):
     # Returns 0 if converged, 1 if more iterations needed, -1 if no force field
     # parameters. Atoms like O3 or F2 may lack UFF terms; that's not fatal.
     if AllChem.UFFOptimizeMolecule(mol, maxIters=1000) != 0:
-        print("⚠️ Warning: Optimization not fully converged.")
+        log.warning("UFF optimisation did not fully converge for %s", name)
     return mol
 
 
@@ -39,7 +42,7 @@ def write_xyz(mol, name: str) -> str:
     with open(xyz_path, "w") as f:
         f.write(f"{len(atoms)}\n{name}\n" + "\n".join(atoms) + "\n")
 
-    print(f"✅ XYZ written: {xyz_path}")
+    log.info("XYZ written: %s", xyz_path)
     return xyz_path
 
 

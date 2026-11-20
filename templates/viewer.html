@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='6' fill='%235eead4'/%3E%3Ccircle cx='6' cy='8' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='26' cy='9' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='16' cy='27' r='3.5' fill='%2338bdf8'/%3E%3Cpath d='M16 16L6 8M16 16l10-7M16 16v11' stroke='%2394a3b8' stroke-width='2'/%3E%3C/svg%3E">
   <title>{{ molecule|capitalize }} · ChemVerse3D</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
@@ -102,6 +104,7 @@
     <span class="brand">ChemVerse3D</span>
     <a class="back" href="/quiz">Quiz</a>
     <a class="back" id="compare-link" href="/compare">Compare</a>
+    {% include "_account.html" %}
     <form class="search" id="jump-form" autocomplete="off">
       <input type="text" id="jump" list="all-mols" placeholder="Search molecule…">
       <button class="btn" type="submit">Go</button>
@@ -145,7 +148,14 @@
 
     <aside class="side">
       <div class="panel">
-        <h1>{{ molecule }}</h1>
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <h1 style="margin:0">{{ molecule }}</h1>
+          {% if current_user %}
+          <button class="btn" id="fav-btn" type="button" aria-pressed="{{ 'true' if favorite else 'false' }}">{{ 'Saved to favourites' if favorite else 'Save to favourites' }}</button>
+          {% else %}
+          <a class="btn" href="/login?next=/viewer/{{ molecule | urlencode }}">Log in to save</a>
+          {% endif %}
+        </div>
         <span class="formula" id="formula"></span>
         <div class="stats">
           <div class="stat"><b id="st-mass"></b><span>g/mol</span></div>
@@ -208,6 +218,22 @@
     $("st-mass").textContent = MOL.mass;
     $("st-atoms").textContent = MOL.atoms;
     $("st-bonds").textContent = MOL.bonds;
+    const favBtn = $("fav-btn");
+    if (favBtn) favBtn.addEventListener("click", async () => {
+      favBtn.disabled = true;
+      try {
+        const res = await fetch("/api/favorites/" + encodeURIComponent(NAME), {
+          method: "POST",
+          headers: { "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content },
+        });
+        if (res.status === 401) { location.href = "/login?next=" + encodeURIComponent(location.pathname); return; }
+        const data = await res.json();
+        if (res.ok) {
+          favBtn.setAttribute("aria-pressed", data.favorite);
+          favBtn.textContent = data.favorite ? "Saved to favourites" : "Save to favourites";
+        }
+      } finally { favBtn.disabled = false; }
+    });
     $("compare-link").href = "/compare?a=" + encodeURIComponent(NAME);
 
     const NAME_OF = {};

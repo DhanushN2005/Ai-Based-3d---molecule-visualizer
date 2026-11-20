@@ -1,10 +1,13 @@
 """Build a .glb for an RDKit molecule with trimesh (no Blender needed)."""
+import logging
 import os
 
 import numpy as np
 import trimesh
 
 from blender_script_gen import element_color  # same colours as the Blender path
+
+log = logging.getLogger("chemverse")
 
 ATOM_RADIUS = 0.3
 BOND_RADIUS = 0.07
@@ -62,5 +65,5 @@ def build_glb(mol, name: str) -> str:
     os.makedirs("outputs", exist_ok=True)
     path = f"outputs/{name}.glb"
     trimesh.util.concatenate(parts).export(path)
-    print(f"✅ GLB written with trimesh: {path}")
+    log.info("GLB written with trimesh: %s", path)
     return path

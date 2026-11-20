@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='6' fill='%235eead4'/%3E%3Ccircle cx='6' cy='8' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='26' cy='9' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='16' cy='27' r='3.5' fill='%2338bdf8'/%3E%3Cpath d='M16 16L6 8M16 16l10-7M16 16v11' stroke='%2394a3b8' stroke-width='2'/%3E%3C/svg%3E">
+  <title>Leaderboard · ChemVerse3D</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <div class="topbar">
+    <a href="/">&larr; Home</a>
+    <a class="brand" href="/">ChemVerse3D</a>
+    <a href="/search">Search</a>
+    <a href="/quiz">Quiz</a>
+    {% include "_account.html" %}
+  </div>
+  <main>
+    <div class="card">
+      <h1>Leaderboard</h1>
+      <p class="muted">Best score on a full {{ size }}-question quiz. Log in to appear here. If you log in right after a quiz, that quiz is credited to you.</p>
+      {% if mine is not none %}<p>Your best: <strong>{{ mine }} / {{ size }}</strong></p>{% endif %}
+      {% if rows %}
+      <table>
+        <tr><th>#</th><th>Player</th><th class="num">Best</th><th class="num">Quizzes</th></tr>
+        {% for r in rows %}
+        <tr {% if current_user and r.username == current_user.username %}class="me"{% endif %}>
+          <td>{{ r.rank }}</td><td>{{ r.username }}</td><td class="num">{{ r.best }} / {{ size }}</td><td class="num">{{ r.plays }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="empty">No scores yet. <a href="/quiz" style="color:#5eead4">Be the first to play.</a></p>
+      {% endif %}
+      <p style="margin-top:22px"><a class="btn primary" href="/quiz">Play the quiz</a></p>
+    </div>
+  </main>
+  <footer style="text-align:center;padding:10px 16px 28px;font-size:.82rem;color:#94a3b8">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer" style="color:#5eead4;text-decoration:none">Dhanush Nataraj</a></footer>
+</body>
+</html>

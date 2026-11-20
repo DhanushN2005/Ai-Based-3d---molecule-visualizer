@@ -1,4 +1,8 @@
+import logging
+
 from elements import rgba_color
+
+log = logging.getLogger("chemverse")
 
 
 def element_color(el):
@@ -34,31 +38,30 @@ def generate_blender_py(mol, name):
         f.write("bpy.ops.object.delete(use_global=False)\n\n")
 
         f.write("# === ATOMS ===\n")
-        for i, (el, (x, y, z)) in enumerate(zip(elements, coordinates)):
+        for i, (el, (x, y, z)) in enumerate(zip(elements, coordinates, strict=False)):
             color = element_color(el)
             offset_x = 0
 
             f.write(f"# Atom {i}: {el}\n")
             f.write(f"bpy.ops.mesh.primitive_uv_sphere_add(radius=0.3, location=({x + offset_x}, {y}, {z}))\n")
-            f.write(f"atom = bpy.context.object\n")
+            f.write("atom = bpy.context.object\n")
             f.write(f"mat = bpy.data.materials.new(name='Mat_{i}')\n")
             f.write(f"mat.diffuse_color = {color}\n")
             f.write("atom.data.materials.append(mat)\n")
 
-            f.write(f"atom.keyframe_insert(data_path='location', frame=1)\n")
+            f.write("atom.keyframe_insert(data_path='location', frame=1)\n")
             f.write(f"atom.location = ({x}, {y}, {z})\n")
-            f.write(f"atom.keyframe_insert(data_path='location', frame=50)\n\n")
+            f.write("atom.keyframe_insert(data_path='location', frame=50)\n\n")
 
             f.write(f"bpy.ops.object.text_add(location=({x + 0.4}, {y}, {z}))\n")
             f.write("text_obj = bpy.context.object\n")
             f.write(f"text_obj.data.body = '{el}'\n")
-            f.write(f"text_obj.scale = (0.3, 0.3, 0.3)\n\n")
+            f.write("text_obj.scale = (0.3, 0.3, 0.3)\n\n")
 
         f.write("# === BONDS ===\n")
         for i, (start_idx, end_idx, order) in enumerate(bonds):
             start = coordinates[start_idx]
             end = coordinates[end_idx]
-            dx, dy, dz = end[0] - start[0], end[1] - start[1], end[2] - start[2]
             bond_count = max(1, int(order))  # aromatic (1.5) -> single cylinder
             shift = 0.15
 
@@ -83,6 +86,6 @@ def generate_blender_py(mol, name):
         glb_path = os.path.abspath(f"outputs/{name}.glb").replace("\\", "/")
         f.write(f"bpy.ops.export_scene.gltf(filepath={glb_path!r}, export_animations=True)\n")
 
-    print("✅ Blender script written")
+    log.info("Blender script written: %s", py_path)
 
     return py_path

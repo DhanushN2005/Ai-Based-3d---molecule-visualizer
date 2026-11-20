@@ -9,13 +9,19 @@ services:
     # One worker: the rate limiter and caches live in memory, so extra workers
     # would each keep their own copy. Threads handle concurrent requests.
     startCommand: gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
-    healthCheckPath: /search
+    healthCheckPath: /healthz
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
       - key: TRUST_PROXY
         value: "1"
+      - key: SESSION_COOKIE_SECURE
+        value: "1"        # Render serves HTTPS
+      - key: SECRET_KEY
+        generateValue: true   # Render creates a random value and keeps it
+      # DATABASE_URL (optional): add a hosted Postgres URL in the dashboard to keep accounts across
+      # redeploys. Without it the app uses SQLite on Render's disk, which is wiped on each deploy.
       - key: GROQ_API_KEY
         sync: false          # you paste the value in the Render dashboard; it is never stored in git
       - key: GROQ_MODEL

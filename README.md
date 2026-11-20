@@ -1,5 +1,10 @@
 # ChemVerse3D
 
+[![CI](https://github.com/DhanushN2005/Ai-Based-3d---molecule-visualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/DhanushN2005/Ai-Based-3d---molecule-visualizer/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+
+<!-- TODO: after deploying on Render, add the live link here: **Live demo:** https://<your-service>.onrender.com -->
+
 An AI-powered web app for **exploring chemical molecules in 3D**. Search any molecule, rotate it, read its structure notation, hear an AI explanation, compare it with another molecule, and test yourself with a quiz.
 
 ---
@@ -20,11 +25,23 @@ It is a Flask app: RDKit builds the 3D structure, 3Dmol.js draws it live in the 
 - 🎨 **Full element colours** (Jmol/CPK) shared by the viewer, legend and `.glb` export
 - 🏷️ **Structure notation in 3D**: name + formula floating above the molecule, colour-coded atom labels, and bond labels such as `C–H`, `C=O`, `C≡N`
 - ⚖️ **Compare** two molecules side by side with a differences table and an AI summary
-- 🎯 **Quiz mode**: identify molecules in 3D, recall formulas, count atoms
+- 🎯 **Quiz mode** with **server-side scoring**: identify molecules in 3D, recall formulas, count atoms. Answers never reach the browser until you answer
+- 👤 **Accounts**: sign up, save **favourite** molecules, and appear on the **leaderboard**
+- 💾 **Database** (SQLite or Postgres) caches PubChem molecules and AI explanations so they survive restarts
 - 🤖 **AI explanation** and "Ask the AI teacher" (Groq), with sentence-highlighted text-to-speech
 - 📦 Downloads: `.glb` (built with trimesh, Blender as fallback) and `.sdf`
 
 See [FEATURES.md](FEATURES.md) for the roadmap and what could come next.
+
+## Screenshots
+
+| Cover | Viewer with bond notation |
+|---|---|
+| ![Cover page](docs/screenshots/cover.png) | ![Viewer showing caffeine with C=O and C-H bond labels](docs/screenshots/viewer.png) |
+
+| Compare | Quiz |
+|---|---|
+| ![Ethanol and dopamine side by side](docs/screenshots/compare.png) | ![Quiz question showing a 3D molecule](docs/screenshots/quiz.png) |
 
 ---
 
@@ -53,6 +70,21 @@ Type a molecule name (for example `caffeine` or `dopamine`) and the app:
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart LR
+    B["Browser<br/>3Dmol.js + plain JS"] -- "HTML pages and JSON APIs" --> F["Flask app (main.py)"]
+    F --> R["RDKit<br/>3D structure, formula, mass"]
+    F --> P["PubChem REST<br/>name to SMILES"]
+    F --> G["Groq API<br/>explanations, Q and A"]
+    F --> T["trimesh<br/>.glb export"]
+    T -. "fallback" .-> BL["Blender (optional)"]
+    F --> C[("Caches")]
+```
+
+Request flows, security measures, scaling limits and design decisions are in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## 📂 Project Structure
 
 | File | Purpose |
@@ -65,6 +97,12 @@ Type a molecule name (for example `caffeine` or `dopamine`) and the app:
 | `glb_trimesh.py` | Builds `outputs/<name>.glb` with trimesh (default) |
 | `blender_script_gen.py` | Fallback: writes `molecules/<name>_blender.py` (spheres for atoms, cylinders for bonds) |
 | `export_glb_blender.py` | Finds and runs Blender, which produces `outputs/<name>.glb` |
+| `models.py` | SQLAlchemy models: users, favourites, quiz sessions, cached molecules and explanations |
+| `accounts.py` | Blueprint: register, login, logout, CSRF protection, favourites, leaderboard |
+| `ratelimit.py` | In-memory sliding-window rate limiter |
+| `tests/` | pytest suite (fake PubChem and Groq, no network) |
+| `docs/` | `ARCHITECTURE.md` and the README screenshots |
+| `Dockerfile`, `render.yaml`, `.github/workflows/ci.yml` | Container image, Render blueprint, CI pipeline |
 | `templates/` | HTML pages: `cover.html` (landing), `index.html` (search), `viewer.html`, `compare.html`, `quiz.html`, `error.html` |
 
 Generated files go to `molecules/` (`.xyz`), `outputs/` (`.glb`) and `data/` (PubChem cache). All three are git-ignored. Roadmap: [FEATURES.md](FEATURES.md).
@@ -128,6 +166,12 @@ copy .env.example .env
 | `PORT` | No | `5000` | Port the server listens on. |
 | `FLASK_DEBUG` | No | `0` | `1` enables debug mode. Local development only. |
 | `MAX_HEAVY_ATOMS` | No | `80` | Largest PubChem molecule the app will build. |
+| `SECRET_KEY` | **Yes, in production** | random per start | Signs login cookies. Without it, everyone is logged out on each restart. |
+| `DATABASE_URL` | No | SQLite file in `DATA_DIR` | Any SQLAlchemy URL, for example hosted Postgres (`postgresql://...`). Use this for data that must survive redeploys. |
+| `SESSION_COOKIE_SECURE` | No | off | Set to `1` when served over HTTPS so the login cookie is HTTPS-only. |
+| `LOG_LEVEL` | No | `INFO` | Python log level (`DEBUG`, `INFO`, `WARNING`...). |
+| `DATA_DIR` | No | `data` | Folder for the SQLite database file. |
+| `PUBCHEM_LOOKUPS_PER_MIN` | No | `20` | New-molecule PubChem lookups allowed per visitor per minute. |
 | `TRUST_PROXY` | No | off | Set to `1` only when deployed behind a proxy (Render, Hugging Face) so rate limits use each visitor's real IP. |
 
 `.env` is in `.gitignore`, so your key is never committed. On a hosting service, set these as environment variables or secrets instead of uploading `.env`.
@@ -151,7 +195,10 @@ Always start the app from the project folder, because it uses relative paths suc
 | **Search** (`/search`) | Search a molecule (suggestions come from the built-in list and PubChem), or click a chip. |
 | **Viewer** (`/viewer/<name>`) | Rotate and zoom, switch style (ball and stick, stick, space-filling, wireframe), show atom labels (symbols or element names), show bond notation (`–` `=` `≡` or `C=O`, `C–H`), toggle the floating name, vibrate, change background, screenshot, fullscreen. Hover an atom for its element name. Read or hear the AI explanation, ask the AI a question, download `.glb` or `.sdf`. |
 | **Compare** (`/compare?a=water&b=ammonia`) | Two molecules side by side, differences highlighted in a table, plus an AI summary. |
-| **Quiz** (`/quiz`) | 10 questions: identify the molecule in 3D, pick the formula, count atoms. Your best score is saved in your browser. |
+| **Quiz** (`/quiz`) | 10 questions: identify the molecule in 3D, pick the formula, count atoms. The server checks each answer and computes your score. |
+| **Account** (`/register`, `/login`) | Create an account with a username and password (8+ characters). No email needed. |
+| **Favourites** (`/favorites`) | Molecules you starred on the viewer page. |
+| **Leaderboard** (`/leaderboard`) | Best score per signed-in player on a full 10-question quiz. Guests can play but are not listed. If a guest logs in or signs up right after finishing a quiz (within an hour, same browser), that quiz is credited to the new account. |
 
 The viewer can start in a given state through the URL, which is handy for sharing:
 `/viewer/caffeine?style=stick&labels=name&bonds=pair&bg=light&spin=0&name=0`
@@ -160,8 +207,9 @@ The viewer can start in a given state through the URL, which is handy for sharin
 ### Limits to know about
 - PubChem needs internet. The viewer loads 3Dmol.js from a CDN, so it needs internet and WebGL too.
 - The `.glb` file has no labels or animation. Those exist only in the live viewer and in screenshots.
-- AI calls and PubChem lookups are rate limited per IP (in memory, per process).
-- Quiz answers are checked in the browser, so use it for learning, not graded exams.
+- AI calls and PubChem lookups are rate limited per IP (in memory, per process). A shared store such as Redis is the next step before adding workers.
+- The leaderboard is a learning feature, not an exam: it has no timer and does not stop someone from replaying many times.
+- Without a persistent database (see `DATABASE_URL`), accounts on a host with an ephemeral disk are lost on redeploy.
 
 ### Blender fallback (optional)
 If trimesh fails, the app looks for Blender in this order:
@@ -173,6 +221,27 @@ If none exist, the app shows "Blender not found" with instructions.
 
 ### Debug mode
 Off by default. For local development only: set `FLASK_DEBUG=1` in `.env`.
+
+## Development
+
+```powershell
+pip install -r requirements.txt -r requirements-dev.txt
+pytest --cov          # 113 tests, about 90% coverage; no network or API key needed
+ruff check .          # lint
+```
+
+The tests use a fake PubChem and a fake Groq, so they are fast and never spend quota. They cover molecule building, the `.glb` export and Blender fallback, every API route, PubChem failures, rate limiting, path traversal, the security headers, and the account system (registration, login, CSRF, open-redirect and session-fixation protection, favourites, server-side quiz scoring and the leaderboard). GitHub Actions runs lint, tests (Python 3.11 and 3.12) and a Docker build with a health-check smoke test on every push.
+
+Other endpoints for operations: `GET /healthz` returns `{"status": "ok"}` and does no chemistry or network work. Logs go to stdout; set `LOG_LEVEL` to change verbosity.
+
+### Docker
+
+```bash
+docker build -t chemverse3d .
+docker run -p 8000:8000 -e GROQ_API_KEY=your-key chemverse3d
+```
+
+Open <http://localhost:8000>. Add `-e TRUST_PROXY=1` only when running behind a reverse proxy. The image runs as a non-root user with one gunicorn worker.
 
 ## Deploy free on Render
 
@@ -186,7 +255,9 @@ The repo includes a `render.yaml` blueprint.
 What the blueprint sets:
 - **Start command:** `gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT`. One worker on purpose: the rate limiter and caches live in memory.
 - **`TRUST_PROXY=1`** so rate limits work per visitor.
-- **Python 3.11.9** and a health check on `/`.
+- **Python 3.11.9** and a health check on `/healthz`.
+
+Accounts, favourites and leaderboard scores live in the database. Render's free web service has an ephemeral disk, so with the default SQLite file they are **wiped on every redeploy**. To keep them, create a free hosted Postgres (for example Neon or Supabase) and add its connection string as the `DATABASE_URL` environment variable in the Render dashboard. The app has been run against a real hosted Postgres (Neon, PostgreSQL 18): sign-up, favourites, the quiz, the leaderboard query and the molecule cache all worked. The automated tests always use a throwaway SQLite file, and refuse to run against any other database.
 
 Free-tier behaviour to expect (check Render's pricing page for current limits):
 - About 512 MB RAM. The app has no torch or Blender, so it should fit.
@@ -205,7 +276,7 @@ ChemVerse3D is a personal project that combines chemistry (RDKit, PubChem), 3D g
 - **"Blender not found"**: only appears if trimesh failed too. Check the console for the trimesh error, or install Blender / set `BLENDER_PATH`.
 - **"Blender Failed" in the console**: the Blender output is printed there. Look at the STDERR section.
 - **"not found in the built-in list or on PubChem"**: check the spelling, or try a common synonym. Names are case-insensitive.
-- **"Too many requests"**: the built-in rate limit (per IP, per minute). Wait a minute.
+- **"Too many requests" or "Too many new-molecule lookups"**: the built-in rate limits (per IP, per minute). Wait a minute.
 - **Speak does nothing**: click the Speak button itself (browsers block speech without a click). The page shows the reason if the browser refuses.
 - **Viewer is blank**: the page loads 3Dmol.js from a CDN, so it needs internet and WebGL.
 - **Explanation unavailable**: set `GROQ_API_KEY` (see Requirements) and check the console for a Groq error.

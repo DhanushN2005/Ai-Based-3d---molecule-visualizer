@@ -75,8 +75,8 @@ Status key: ✅ done · 🚧 in this release · 📋 planned
 | Priority | Feature | Why | How | Effort |
 |---|---|---|---|---|
 | High | **Shareable links and embeds** (`<iframe>` viewer) | Teachers paste a molecule into slides or an LMS | A minimal `/embed/<name>` page without chrome | Small |
-| High | **Accounts, favourites and history** | Personal collections and quiz progress | Flask-Login or an OAuth provider plus SQLite/Postgres | Medium |
-| Medium | **Leaderboard** | Motivation for quizzes | Needs accounts and server-side scoring | Medium |
+| Done | **Accounts, favourites** (history page still to do) | Personal collections and quiz progress | Flask-Login or an OAuth provider plus SQLite/Postgres | Medium |
+| Done | **Leaderboard** with server-side scoring | Motivation for quizzes | Implemented | Medium |
 | Medium | **Multi-language UI and explanations** | Reach students outside English | A language parameter in the AI prompt plus i18n strings | Medium |
 | Low | **Export to PDF / printable study sheet** | Offline revision | Render the page to PDF or build a template | Medium |
 
@@ -93,7 +93,7 @@ Status key: ✅ done · 🚧 in this release · 📋 planned
 
 | Priority | Feature | Why | How | Effort |
 |---|---|---|---|---|
-| **Critical** | **Rate limiting** — 🚧 basic in-memory limit per IP is done on the home form, `/api/ask`, `/api/compare`, `/api/quiz` and `/api/suggest`. Still needed: the viewer page (it can trigger PubChem + AI), and a shared store (Redis) once you run more than one worker | These endpoints spend your Groq quota and PubChem's rate limit | Flask-Limiter with Redis | Small |
+| **Critical** | **Rate limiting** — ✅ basic in-memory limits per IP on the search form, `/api/ask`, `/api/compare`, `/api/quiz`, `/api/suggest`, plus a separate budget on new PubChem lookups (which covers the viewer page). Still needed: a shared store (Redis) once you run more than one worker | These endpoints spend your Groq quota and PubChem's rate limit | Flask-Limiter with Redis | Small |
 | **Critical** | **Deployment** (Docker plus a free host) | Nobody can use it while it only runs on your PC | Dockerfile, gunicorn, secrets as environment variables | Small |
 | High | **Automated tests and CI** | Safe changes. Today nothing is tested | pytest for molecule building, the GLB export, API validation; GitHub Actions | Medium |
 | High | **Persistent cache** (SQLite) for molecules, AI text and PubChem results | Faster pages, fewer API calls, survives restarts | Replace the in-memory dicts | Medium |
@@ -117,4 +117,4 @@ Status key: ✅ done · 🚧 in this release · 📋 planned
 - PubChem needs internet. Names it does not recognise return "not found".
 - The `.glb` file has no labels or animation. The live viewer does.
 - The Groq free tier has request limits. Cached explanations help, but heavy use needs rate limiting and a paid plan.
-- Quiz answers are checked in the browser, so a determined user can read them. Fine for learning, not for graded exams (those need server-side scoring).
+- The quiz is scored on the server and answers are hidden until answered, but the leaderboard has no timer or anti-replay rules. Fine for learning, not for graded exams.

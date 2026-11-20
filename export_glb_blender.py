@@ -1,7 +1,10 @@
 import glob
+import logging
 import os
 import shutil
 import subprocess
+
+log = logging.getLogger("chemverse")
 
 
 def find_blender():
@@ -50,16 +53,13 @@ def run_blender_script(script_path):
         result = subprocess.run(
             cmd,
             check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=120,
         )
-        print("✅ Blender Output:\n", result.stdout)
+        log.info("Blender finished: %s", result.stdout.strip()[-300:])
         if result.stderr:
-            print("⚠️ Blender Errors:\n", result.stderr)
+            log.warning("Blender stderr: %s", result.stderr.strip()[-300:])
     except subprocess.CalledProcessError as e:
-        print("❌ Blender Failed:")
-        print("STDOUT:\n", e.stdout)
-        print("STDERR:\n", e.stderr)
+        log.error("Blender failed. stdout: %s | stderr: %s", (e.stdout or "")[-300:], (e.stderr or "")[-300:])
         raise  # Let it bubble up to the main app for full traceback

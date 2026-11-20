@@ -5,3 +5,7 @@ venv/
 molecules/
 outputs/
 data/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

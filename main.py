@@ -1,17 +1,17 @@
-import json
+import logging
 import math
 import os
 import random
 import re
+import secrets
 import sys
 import threading
-import time
-import traceback
-from collections import defaultdict, deque
-from functools import wraps
+import uuid
+from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
-from flask import Flask, render_template, request, jsonify, send_from_directory
+
 from dotenv import load_dotenv
+from flask import Flask, g, jsonify, render_template, request, send_from_directory, session
 
 load_dotenv()  # read .env before anything reads os.environ
 
@@ -20,22 +20,57 @@ for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
+import requests
 from rdkit import Chem, RDLogger
 from rdkit.Chem import Descriptors, rdMolDescriptors
 from rdkit.Geometry import Point3D
 
-from molecules_db import MOLECULE_DB
-from generate_xyz import build_molecule, write_xyz
+import accounts
 from blender_script_gen import generate_blender_py
+from elements import UNKNOWN_HEX, colors_for
 from export_glb_blender import run_blender_script
+from generate_xyz import build_molecule, write_xyz
 from glb_trimesh import build_glb
-from elements import colors_for, UNKNOWN_HEX
+from models import CustomMolecule, Explanation, QuizSession, database_url, db
+from molecules_db import MOLECULE_DB
+from ratelimit import _hits, rate_limit  # noqa: F401  (_hits is re-exported for the tests)
+from ratelimit import allowed as _allowed
 
-import requests
+logging.basicConfig(
+    level=os.environ.get("LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
+log = logging.getLogger("chemverse")
 
 RDLogger.DisableLog("rdApp.*")  # PubChem SMILES can be noisy; errors are handled below
 
 app = Flask(__name__)
+
+DATA_DIR = os.environ.get("DATA_DIR", "data")
+
+
+def _secret_key():
+    key = os.environ.get("SECRET_KEY", "").strip()
+    if key:
+        return key
+    log.warning("SECRET_KEY is not set: using a random key, so logins reset on every restart. "
+                "Set SECRET_KEY in production.")
+    return secrets.token_hex(32)
+
+
+app.config.update(
+    SECRET_KEY=_secret_key(),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE") == "1",   # set to 1 behind HTTPS
+    PERMANENT_SESSION_LIFETIME=timedelta(days=14),
+    SQLALCHEMY_DATABASE_URI=database_url(DATA_DIR),
+    SQLALCHEMY_TRACK_MODIFICATIONS=False,
+    SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
+    MAX_CONTENT_LENGTH=64 * 1024,       # no endpoint needs a large body
+)
+db.init_app(app)
+app.register_blueprint(accounts.bp)
 
 # Behind a host's proxy (Render, Hugging Face...) every request would look like it comes
 # from the proxy's IP, so the rate limiter would treat all users as one. Only enable this
@@ -47,30 +82,6 @@ if os.environ.get("TRUST_PROXY") == "1":
 molecule_db = MOLECULE_DB
 PT = Chem.GetPeriodicTable()
 MAX_HEAVY_ATOMS = int(os.environ.get("MAX_HEAVY_ATOMS", "80"))
-
-
-# ------------------------------------------------------------- rate limiting
-_hits = defaultdict(deque)
-_hits_lock = threading.Lock()
-
-
-def rate_limit(limit, window=60):
-    """Allow `limit` calls per `window` seconds per client IP (in-memory, per process)."""
-    def deco(fn):
-        @wraps(fn)
-        def wrapper(*a, **kw):
-            now = time.time()
-            key = (fn.__name__, request.remote_addr)
-            with _hits_lock:
-                q = _hits[key]
-                while q and now - q[0] > window:
-                    q.popleft()
-                if len(q) >= limit:
-                    return jsonify(success=False, error="Too many requests. Please wait a minute."), 429
-                q.append(now)
-            return fn(*a, **kw)
-        return wrapper
-    return deco
 
 
 # ---------------------------------------------------------------- LLM (Groq)
@@ -105,13 +116,33 @@ def _groq(messages, max_tokens=600):
         res.raise_for_status()
         return res.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
-        print("❌ Groq error:", e)
+        log.error("Groq request failed: %s", e)
         raise LLMUnavailable("The AI service is unavailable right now.") from e
+
+
+def _stored_explanation(molecule):
+    with app.app_context():
+        row = db.session.get(Explanation, molecule)
+        return row.text if row else None
+
+
+def _store_explanation(molecule, text):
+    with app.app_context():
+        try:
+            db.session.merge(Explanation(name=molecule, text=text))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            log.warning("Could not store the explanation for %s", molecule)
 
 
 def explain_molecule(molecule: str) -> str:
     if molecule in _explanations:
         return _explanations[molecule]
+    stored = _stored_explanation(molecule)
+    if stored:
+        _explanations[molecule] = stored
+        return stored
     prompt = (
         f"Explain the molecule '{molecule}' to a school student in about 150 words. "
         "Cover its structure and formula, functional groups, physical and chemical "
@@ -126,12 +157,13 @@ def explain_molecule(molecule: str) -> str:
     except LLMUnavailable as e:
         return f"Explanation unavailable: {e}"
     _explanations[molecule] = text
+    _store_explanation(molecule, text)
     return text
 
 
 # ------------------------------------------------- molecule lookup (+ PubChem)
 PUBCHEM = "https://pubchem.ncbi.nlm.nih.gov/rest"
-CACHE_FILE = os.path.join("data", "pubchem_cache.json")
+PUBCHEM_LOOKUPS_PER_MIN = int(os.environ.get("PUBCHEM_LOOKUPS_PER_MIN", "20"))
 _custom = {}  # slug -> {"smiles": ..., "title": ...}, filled from PubChem
 _custom_lock = threading.Lock()
 
@@ -141,23 +173,20 @@ class MoleculeError(Exception):
 
 
 def _load_custom():
-    try:
-        with open(CACHE_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, dict):
-            _custom.update({k: v for k, v in data.items()
-                            if isinstance(v, dict) and isinstance(v.get("smiles"), str)})
-    except (OSError, ValueError):
-        pass
+    """Fill the in-process cache from the database (survives restarts)."""
+    with app.app_context():
+        for row in CustomMolecule.query.all():
+            _custom[row.name] = {"smiles": row.smiles, "title": row.name}
 
 
-def _save_custom():
-    os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(_custom, f, indent=1)
-
-
-_load_custom()
+def _persist_custom(key, smiles):
+    with app.app_context():
+        try:
+            db.session.merge(CustomMolecule(name=key, smiles=smiles))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            log.warning("Could not store PubChem molecule %s", key)
 
 
 def slugify(text):
@@ -170,20 +199,29 @@ def is_known(key):
     return key in molecule_db or key in _custom
 
 
+with app.app_context():
+    db.create_all()
+_load_custom()
+accounts.configure(slugify, is_known)
+
+
 def smiles_of(key):
     return molecule_db[key] if key in molecule_db else _custom[key]["smiles"]
 
 
 def pubchem_lookup(query):
     """Name -> SMILES from PubChem. Raises MoleculeError with a friendly message."""
+    if not _allowed("pubchem", PUBCHEM_LOOKUPS_PER_MIN):
+        raise MoleculeError("Too many new-molecule lookups. Please wait a minute.")
+    log.info("PubChem lookup: %s", query)
     try:
         res = requests.get(
             f"{PUBCHEM}/pug/compound/name/{quote(query, safe='')}/property/SMILES,Title/JSON",
             timeout=15,
             headers={"User-Agent": "chemverse3d"},
         )
-    except requests.RequestException:
-        raise MoleculeError("Could not reach PubChem. Check your internet connection.")
+    except requests.RequestException as exc:
+        raise MoleculeError("Could not reach PubChem. Check your internet connection.") from exc
     if res.status_code == 404:
         raise MoleculeError(f"'{query}' was not found in the built-in list or on PubChem.")
     if res.status_code in (429, 503):
@@ -216,14 +254,11 @@ def resolve_molecule(name):
             f"'{key}' is too large ({mol.GetNumHeavyAtoms()} heavy atoms; limit {MAX_HEAVY_ATOMS}).")
     try:
         get_mol(key, smiles)  # make sure a 3D structure can actually be built
-    except Exception:
-        raise MoleculeError(f"Could not build a 3D structure for '{key}'.")
+    except Exception as exc:
+        raise MoleculeError(f"Could not build a 3D structure for '{key}'.") from exc
     with _custom_lock:
         _custom[key] = {"smiles": smiles, "title": key}
-        try:
-            _save_custom()
-        except OSError:
-            print("⚠️ Could not write the PubChem cache file.")
+    _persist_custom(key, smiles)
     return key
 
 
@@ -309,13 +344,11 @@ def ensure_glb(name, mol, force=False):
     try:
         build_glb(mol, name)  # primary: pure Python, no Blender
     except Exception:
-        print("⚠️ trimesh export failed, falling back to Blender:")
-        traceback.print_exc()
+        log.exception("trimesh export failed for %s, falling back to Blender", name)
         try:
             run_blender_script(generate_blender_py(mol, name))
         except Exception:
-            print("❌ Blender fallback failed too:")
-            traceback.print_exc()
+            log.exception("Blender fallback failed too for %s", name)
     return path if os.path.exists(path) else None
 
 
@@ -387,6 +420,64 @@ def make_quiz(n=10):
     return questions
 
 
+# ----------------------------------------------------- headers / errors / health
+CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "media-src 'self'",
+    "connect-src 'self'",
+    "worker-src 'self' blob:",
+    "frame-ancestors 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+])
+
+
+@app.after_request
+def security_headers(resp):
+    resp.headers.setdefault("Content-Security-Policy", CSP)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return resp
+
+
+def _error(status, title, message):
+    """JSON for API/POST callers, an HTML page for browsers."""
+    if request.path.startswith("/api/") or request.method == "POST":
+        return jsonify(success=False, error=message), status
+    return render_template("error.html", title=title, message=message), status
+
+
+@app.errorhandler(404)
+def not_found(_e):
+    return _error(404, "Page not found", "That page does not exist.")
+
+
+@app.errorhandler(413)
+def too_large(_e):
+    return _error(413, "Request too large", "That request is too large.")
+
+
+@app.errorhandler(405)
+def bad_method(_e):
+    return _error(405, "Method not allowed", "That request type is not allowed here.")
+
+
+@app.errorhandler(500)
+def server_error(_e):
+    log.exception("Unhandled server error on %s", request.path)
+    return _error(500, "Something went wrong", "Something went wrong on our side. Please try again.")
+
+
+@app.route("/healthz")
+def healthz():
+    """Cheap liveness check for hosts and Docker (does no chemistry or network work)."""
+    return jsonify(status="ok")
+
+
 # -------------------------------------------------------------------- routes
 @rate_limit(20)
 def _build_from_form():
@@ -395,14 +486,13 @@ def _build_from_form():
         mol = get_mol(name)  # one conformer for everything
         write_xyz(mol, name)
         if ensure_glb(name, mol, force=True):
-            print(f"✅ File created: outputs/{name}.glb")
+            log.info("GLB created: outputs/%s.glb", name)
         # The viewer draws from RDKit data, so it works even without a GLB.
         return jsonify(success=True, viewer_url=f"/viewer/{quote(name)}")
     except MoleculeError as e:
         return jsonify(success=False, error=str(e))
     except Exception:
-        print("❌ Error:")
-        traceback.print_exc()
+        log.exception("Unexpected error building molecule")
         return jsonify(success=False, error="Something went wrong building that molecule.")
 
 
@@ -424,7 +514,7 @@ def viewer(molecule):
     try:
         name = resolve_molecule(molecule)  # also lets shared PubChem links work
     except MoleculeError as e:
-        return render_template("error.html", message=str(e)), 404
+        return render_template("error.html", title="Molecule not available", message=str(e)), 404
     info = molecule_info(name)
     has_glb = ensure_glb(name, get_mol(name)) is not None
     return render_template(
@@ -432,6 +522,7 @@ def viewer(molecule):
         molecule=name,
         info=info,
         has_glb=has_glb,
+        favorite=bool(g.user and accounts.is_favorite(g.user.id, name)),
         explanation=explain_molecule(name),
         molecules=sorted(molecule_db),
     )
@@ -459,14 +550,83 @@ def quiz():
     return render_template("quiz.html")
 
 
+def _prune_quiz_sessions():
+    """Drop unfinished quizzes older than a day so the table cannot grow without bound."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=1)
+    try:
+        QuizSession.query.filter(QuizSession.finished.is_(False), QuizSession.created_at < cutoff).delete()
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+
 @app.route('/api/quiz')
 @rate_limit(30)
 def api_quiz():
+    """Start a quiz. Correct answers stay on the server; the browser only gets the questions."""
     try:
         n = max(3, min(int(request.args.get("n", 10)), 15))
     except ValueError:
         n = 10
-    return jsonify(questions=make_quiz(n))
+    questions = make_quiz(n)
+    _prune_quiz_sessions()
+    quiz_id = str(uuid.uuid4())
+    db.session.add(QuizSession(id=quiz_id, user_id=g.user.id if g.user else None,
+                               questions=questions, responses={}, total=len(questions)))
+    db.session.commit()
+    public = [{k: v for k, v in q.items() if k not in ("answer", "explain")} for q in questions]
+    return jsonify(quiz_id=quiz_id, questions=public, signed_in=g.user is not None)
+
+
+def _quiz_or_404(quiz_id):
+    return db.session.get(QuizSession, quiz_id)
+
+
+@app.route('/api/quiz/<quiz_id>/answer', methods=['POST'])
+@rate_limit(120)
+def api_quiz_answer(quiz_id):
+    session_row = _quiz_or_404(quiz_id)
+    if session_row is None:
+        return jsonify(error="Unknown quiz."), 404
+    if session_row.finished:
+        return jsonify(error="This quiz is already finished."), 409
+    data = request.get_json(silent=True) or {}
+    try:
+        index, choice = int(data["question"]), int(data["choice"])
+    except (KeyError, TypeError, ValueError):
+        return jsonify(error="Send a question number and a choice."), 400
+    if not (0 <= index < session_row.total and 0 <= choice < 4):
+        return jsonify(error="Question or choice out of range."), 400
+    if str(index) in session_row.responses:
+        return jsonify(error="That question was already answered."), 409
+    session_row.responses = {**session_row.responses, str(index): choice}   # reassign so the JSON change is saved
+    db.session.commit()
+    q = session_row.questions[index]
+    return jsonify(correct=choice == q["answer"], answer=q["answer"], explain=q["explain"])
+
+
+@app.route('/api/quiz/<quiz_id>/finish', methods=['POST'])
+@rate_limit(30)
+def api_quiz_finish(quiz_id):
+    """The score is computed here from the stored answers; the browser cannot send its own."""
+    session_row = _quiz_or_404(quiz_id)
+    if session_row is None:
+        return jsonify(error="Unknown quiz."), 404
+    if not session_row.finished:
+        session_row.score = sum(
+            1 for i, q in enumerate(session_row.questions) if session_row.responses.get(str(i)) == q["answer"])
+        session_row.finished = True
+        # the 3D data is only needed while playing; keep the row small
+        session_row.questions = [{k: v for k, v in q.items() if k not in ("molblock", "colors")}
+                                 for q in session_row.questions]
+        db.session.commit()
+    if session_row.user_id is None and g.user is None:
+        session[accounts.GUEST_QUIZ_KEY] = quiz_id      # lets a login right after this quiz claim it
+    result = {"score": session_row.score, "total": session_row.total, "answered": len(session_row.responses)}
+    if session_row.user_id:
+        result["best"] = accounts.user_best(session_row.user_id)
+        result["on_leaderboard"] = session_row.total == accounts.LEADERBOARD_QUIZ_SIZE
+    return jsonify(result)
 
 
 @app.route('/api/suggest')

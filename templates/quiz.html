@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='6' fill='%235eead4'/%3E%3Ccircle cx='6' cy='8' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='26' cy='9' r='3.5' fill='%2338bdf8'/%3E%3Ccircle cx='16' cy='27' r='3.5' fill='%2338bdf8'/%3E%3Cpath d='M16 16L6 8M16 16l10-7M16 16v11' stroke='%2394a3b8' stroke-width='2'/%3E%3C/svg%3E">
   <title>Quiz · ChemVerse3D</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
@@ -45,6 +46,10 @@
            -webkit-background-clip:text; background-clip:text; color:transparent; }
     ul.review { text-align:left; padding-left:18px; line-height:1.7; }
     .hide { display:none !important; }
+    .notice { margin:16px 0; padding:14px 16px; text-align:left; line-height:1.55; border-radius:12px;
+              background:rgba(56,189,248,.1); border:1px solid rgba(56,189,248,.45); }
+    .notice .row { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+    .notice a.btn { text-decoration:none; padding:9px 16px; font-size:.92rem; }
     @media (max-width:560px) { .opts { grid-template-columns:1fr; } main { padding:14px; } }
     .site-credit { text-align:center; padding:22px 16px 28px; font-size:.82rem; color:#94a3b8; }
     .site-credit a { color:#5eead4; text-decoration:none; }
@@ -56,12 +61,24 @@
     <a href="/">← Home</a>
     <span class="brand">ChemVerse3D</span>
     <a href="/compare">Compare</a>
+    {% include "_account.html" %}
   </div>
 
   <main>
     <section class="card center" id="start">
       <h1>Molecule Quiz</h1>
       <p class="muted">10 questions: identify molecules in 3D, recall formulas and count atoms.</p>
+      {% if not current_user %}
+      <div class="notice" id="guest-note">
+        <strong>You are playing as a guest.</strong> Guest scores are not saved to the leaderboard.
+        Log in or create a free account first to compete.
+        <div class="row">
+          <a class="btn primary" href="/login?next=/quiz">Log in</a>
+          <a class="btn" href="/register?next=/quiz">Create account</a>
+        </div>
+        <div class="muted" style="margin-top:8px;font-size:.88rem">Changed your mind mid-way? Log in right after a quiz and that quiz is credited to you.</div>
+      </div>
+      {% endif %}
       <p class="muted" id="best"></p>
       <button class="btn primary" id="start-btn">Start quiz</button>
       <p class="muted" id="start-err" style="color:#fca5a5"></p>
@@ -81,6 +98,13 @@
       <div class="muted">Your score</div>
       <div class="big" id="final"></div>
       <p id="verdict"></p>
+      <div class="notice hide" id="save-prompt">
+        <strong>Want this score on the leaderboard?</strong> Log in or create an account now and this quiz is credited to you.
+        <div class="row">
+          <a class="btn primary" href="/login?next=/leaderboard">Log in</a>
+          <a class="btn" href="/register?next=/leaderboard">Create account</a>
+        </div>
+      </div>
       <ul class="review" id="review"></ul>
       <button class="btn primary" id="again">Play again</button>
     </section>
@@ -90,19 +114,26 @@
     const $ = id => document.getElementById(id);
     const sub = s => String(s).replace(/(\d+)/g, "<sub>$1</sub>");
     const isFormula = t => t === "formula";
+    const SIGNED_IN = {{ 'true' if current_user else 'false' }};
 
-    // best score is only a convenience, so storage failures are ignored
+    // Guests keep a best score in the browser; signed-in players get theirs from the server.
     const store = {
       get() { try { return parseInt(localStorage.getItem("quizBest") || "0", 10) || 0; } catch (_) { return 0; } },
       set(v) { try { localStorage.setItem("quizBest", String(v)); } catch (_) {} },
     };
-    function showBest() {
-      const b = store.get();
-      $("best").textContent = b ? "Best score: " + b + " / 10" : "";
+    function showBest(serverBest) {
+      const el = $("best");
+      if (SIGNED_IN) {
+        el.textContent = serverBest != null ? "Your best on the leaderboard: " + serverBest + " / 10" : "Your score is saved to the leaderboard.";
+      } else {
+        const b = store.get();
+        el.textContent = b ? "Best score on this device: " + b + " / 10." : "";
+      }
     }
     showBest();
 
-    let questions = [], idx = 0, score = 0, streak = 0, missed = [], view = null;
+    // Correct answers never reach the browser until you answer; the server checks every answer and computes the score.
+    let quizId = null, questions = [], idx = 0, score = 0, streak = 0, missed = [], view = null, locked = false;
 
     function show(id) { ["start", "play", "end"].forEach(s => $(s).classList.toggle("hide", s !== id)); }
 
@@ -114,13 +145,14 @@
       $("start-btn").disabled = true;
       try {
         const res = await fetch("/api/quiz?n=10");
-        if (!res.ok) throw new Error("Could not load questions (" + res.status + ").");
-        questions = (await res.json()).questions;
+        if (!res.ok) throw new Error(res.status === 429 ? "Too many quizzes started. Please wait a minute." : "Could not load questions (" + res.status + ").");
+        const data = await res.json();
+        quizId = data.quiz_id; questions = data.questions;
       } catch (e) {
         $("start-err").textContent = e.message; $("start-btn").disabled = false; show("start"); return;
       }
       $("start-btn").disabled = false;
-      idx = 0; score = 0; streak = 0; missed = [];
+      idx = 0; score = 0; streak = 0; missed = []; locked = false;
       show("play"); ask();
     }
 
@@ -154,18 +186,32 @@
       });
     }
 
-    function answer(i) {
+    async function answer(i) {
+      if (locked) return;
+      locked = true;
       const q = questions[idx], btns = [...$("opts").children];
       btns.forEach(b => b.disabled = true);
-      btns[q.answer].classList.add("good");
-      if (i === q.answer) {
+      let r;
+      try {
+        const res = await fetch("/api/quiz/" + quizId + "/answer", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: idx, choice: i }),
+        });
+        r = await res.json();
+        if (!res.ok) throw new Error(r.error || "Could not check that answer.");
+      } catch (e) {
+        $("feedback").textContent = e.message;
+        btns.forEach(b => b.disabled = false); locked = false; return;
+      }
+      btns[r.answer].classList.add("good");
+      if (r.correct) {
         score++; streak++;
-        $("feedback").innerHTML = "<b class='good'>Correct!</b> " + sub(q.explain);
+        $("feedback").innerHTML = "<b class='good'>Correct!</b> " + sub(r.explain);
       } else {
         streak = 0; btns[i].classList.add("bad");
-        missed.push(q);
-        $("feedback").innerHTML = "<b class='bad'>Not quite.</b> " + sub(q.explain) +
-          " Correct answer: <b>" + (isFormula(q.type) ? sub(q.options[q.answer]) : q.options[q.answer]) + "</b>";
+        missed.push({ text: q.text, explain: r.explain });
+        $("feedback").innerHTML = "<b class='bad'>Not quite.</b> " + sub(r.explain) +
+          " Correct answer: <b>" + (isFormula(q.type) ? sub(q.options[r.answer]) : q.options[r.answer]) + "</b>";
       }
       $("score").textContent = "Score " + score;
       $("streak").textContent = streak > 1 ? streak + " in a row" : "";
@@ -174,6 +220,7 @@
       next.textContent = idx + 1 < questions.length ? "Next →" : "See results";
       next.classList.remove("hide");
       next.focus();
+      locked = false;
     }
 
     $("next-btn").addEventListener("click", () => {
@@ -181,14 +228,20 @@
       idx < questions.length ? ask() : finish();
     });
 
-    function finish() {
+    async function finish() {
+      let result = { score, total: questions.length };
+      try {
+        const res = await fetch("/api/quiz/" + quizId + "/finish", { method: "POST" });
+        if (res.ok) result = await res.json();      // the server's score is the one that counts
+      } catch (_) { /* offline: fall back to the local count for display only */ }
       show("end");
-      const total = questions.length;
-      $("final").textContent = score + " / " + total;
-      const ratio = score / total;
+      $("final").textContent = result.score + " / " + result.total;
+      const ratio = result.score / result.total;
       $("verdict").textContent = ratio === 1 ? "Perfect!" : ratio >= 0.7 ? "Great job!"
         : ratio >= 0.4 ? "Good start, keep practising." : "Review the molecules and try again.";
-      if (score > store.get()) { store.set(score); $("verdict").textContent += " New best score!"; }
+      if (!SIGNED_IN && result.score > store.get()) { store.set(result.score); $("verdict").textContent += " New best score on this device!"; }
+      $("save-prompt").classList.toggle("hide", SIGNED_IN || result.total !== 10);
+      if (SIGNED_IN && result.on_leaderboard) $("verdict").innerHTML += ' <a href="/leaderboard" style="color:#5eead4">See the leaderboard</a>.';
       const list = $("review"); list.innerHTML = "";
       missed.forEach(q => {
         const li = document.createElement("li");
@@ -196,7 +249,7 @@
         list.appendChild(li);
       });
       if (!missed.length) { const li = document.createElement("li"); li.textContent = "No mistakes to review."; list.appendChild(li); }
-      showBest();
+      showBest(result.best);
     }
   </script>
   <footer class="site-credit">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></footer>
