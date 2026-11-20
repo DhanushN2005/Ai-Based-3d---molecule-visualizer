@@ -57,7 +57,7 @@ Type a molecule name (for example `caffeine` or `dopamine`) and the app:
 
 | File | Purpose |
 |---|---|
-| `main.py` | Flask app: pages (`/`, `/viewer/<name>`, `/compare`, `/quiz`) and JSON APIs (`/api/ask`, `/api/compare`, `/api/quiz`, `/api/suggest`, `/api/frames/<name>`), PubChem lookup, rate limiting |
+| `main.py` | Flask app: pages (`/` cover, `/search`, `/viewer/<name>`, `/compare`, `/quiz`) and JSON APIs (`/api/ask`, `/api/compare`, `/api/quiz`, `/api/suggest`, `/api/frames/<name>`), PubChem lookup, rate limiting |
 | `elements.py` | One colour table for every element (unknown elements are bright pink) |
 | `static/js/molview.js` | Shared 3Dmol.js wrapper: styles, labels, bond notation, hover |
 | `molecules_db.py` | The list of molecules and their SMILES |
@@ -65,7 +65,7 @@ Type a molecule name (for example `caffeine` or `dopamine`) and the app:
 | `glb_trimesh.py` | Builds `outputs/<name>.glb` with trimesh (default) |
 | `blender_script_gen.py` | Fallback: writes `molecules/<name>_blender.py` (spheres for atoms, cylinders for bonds) |
 | `export_glb_blender.py` | Finds and runs Blender, which produces `outputs/<name>.glb` |
-| `templates/` | HTML pages: `index.html` (search), `viewer.html`, `compare.html`, `quiz.html`, `error.html` |
+| `templates/` | HTML pages: `cover.html` (landing), `index.html` (search), `viewer.html`, `compare.html`, `quiz.html`, `error.html` |
 
 Generated files go to `molecules/` (`.xyz`), `outputs/` (`.glb`) and `data/` (PubChem cache). All three are git-ignored. Roadmap: [FEATURES.md](FEATURES.md).
 
@@ -139,7 +139,7 @@ cd "E:\project\AI&ML\chemistry"
 python main.py
 ```
 
-Open <http://127.0.0.1:5000>, type a molecule name and submit. Generation usually takes under a second.
+Open <http://127.0.0.1:5000> for the cover page, click **Start exploring**, type a molecule name and submit. Generation usually takes under a second.
 
 Always start the app from the project folder, because it uses relative paths such as `outputs/` and `molecules/`.
 
@@ -147,7 +147,8 @@ Always start the app from the project folder, because it uses relative paths suc
 
 | Page | What you can do |
 |---|---|
-| **Home** (`/`) | Search a molecule (suggestions come from the built-in list and PubChem), or click a chip. |
+| **Cover** (`/`) | Landing page with a live 3D demo, the feature list and buttons into the app. No login or sign-up. |
+| **Search** (`/search`) | Search a molecule (suggestions come from the built-in list and PubChem), or click a chip. |
 | **Viewer** (`/viewer/<name>`) | Rotate and zoom, switch style (ball and stick, stick, space-filling, wireframe), show atom labels (symbols or element names), show bond notation (`–` `=` `≡` or `C=O`, `C–H`), toggle the floating name, vibrate, change background, screenshot, fullscreen. Hover an atom for its element name. Read or hear the AI explanation, ask the AI a question, download `.glb` or `.sdf`. |
 | **Compare** (`/compare?a=water&b=ammonia`) | Two molecules side by side, differences highlighted in a table, plus an AI summary. |
 | **Quiz** (`/quiz`) | 10 questions: identify the molecule in 3D, pick the formula, count atoms. Your best score is saved in your browser. |

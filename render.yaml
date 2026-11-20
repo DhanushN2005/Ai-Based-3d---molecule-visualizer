@@ -9,7 +9,7 @@ services:
     # One worker: the rate limiter and caches live in memory, so extra workers
     # would each keep their own copy. Threads handle concurrent requests.
     startCommand: gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT
-    healthCheckPath: /
+    healthCheckPath: /search
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION

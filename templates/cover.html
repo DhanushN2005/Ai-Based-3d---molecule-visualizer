@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChemVerse3D · Explore molecules in 3D</title>
+  <meta name="description" content="Search any molecule, rotate it in 3D, learn with an AI teacher, compare molecules and test yourself with a quiz.">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
+  <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
+  <style>
+    :root { --bg:#0b1220; --panel:rgba(19,28,49,.72); --border:rgba(255,255,255,.12); --text:#f1f5f9;
+            --muted:#a8b4c7; --accent:#5eead4; --accent-2:#38bdf8; }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin:0; color:var(--text); background:var(--bg);
+           font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+    .bg-video { position:fixed; inset:0; width:100%; height:100%; object-fit:cover; z-index:-2; }
+    .bg-overlay { position:fixed; inset:0; z-index:-1;
+                  background: linear-gradient(90deg, rgba(11,18,32,.92) 0%, rgba(11,18,32,.78) 45%, rgba(11,18,32,.62) 100%); }
+    a { color:inherit; }
+
+    nav { display:flex; align-items:center; gap:22px; padding:18px 6vw; }
+    .logo { font-weight:800; font-size:1.25rem; letter-spacing:.2px; text-decoration:none;
+            background:linear-gradient(90deg,var(--accent),var(--accent-2)); -webkit-background-clip:text;
+            background-clip:text; color:transparent; margin-right:auto; }
+    nav a.link { color:var(--muted); text-decoration:none; font-size:.95rem; }
+    nav a.link:hover { color:var(--text); }
+
+    .btn { display:inline-block; padding:14px 26px; font-size:1.02rem; font-weight:700; text-decoration:none;
+           border-radius:12px; border:1px solid var(--border); background:rgba(255,255,255,.08); color:var(--text);
+           transition:transform .12s, background .15s; }
+    .btn:hover { transform:translateY(-2px); background:rgba(255,255,255,.16); }
+    .btn.primary { color:#04211d; border:none; background:linear-gradient(90deg,var(--accent),var(--accent-2));
+                   box-shadow:0 10px 30px rgba(56,189,248,.28); }
+    .btn.primary:hover { background:linear-gradient(90deg,var(--accent),var(--accent-2)); }
+
+    .hero { display:grid; grid-template-columns:1.05fr .95fr; gap:40px; align-items:center;
+            max-width:1250px; margin:0 auto; padding:5vh 6vw 8vh; min-height:78vh; }
+    .eyebrow { display:inline-block; padding:6px 14px; font-size:.82rem; color:var(--accent);
+               border:1px solid rgba(94,234,212,.4); border-radius:999px; background:rgba(94,234,212,.08); }
+    h1 { margin:18px 0 14px; font-size:clamp(2.4rem,5.4vw,4.1rem); line-height:1.05; letter-spacing:-.02em; }
+    h1 span { background:linear-gradient(90deg,var(--accent),var(--accent-2)); -webkit-background-clip:text;
+              background-clip:text; color:transparent; }
+    .lead { max-width:34em; margin:0 0 28px; font-size:1.12rem; line-height:1.65; color:var(--muted); }
+    .cta { display:flex; flex-wrap:wrap; gap:12px; }
+    .stats { display:flex; flex-wrap:wrap; gap:28px; margin-top:34px; }
+    .stats b { display:block; font-size:1.6rem; }
+    .stats span { font-size:.82rem; color:var(--muted); }
+
+    .demo { position:relative; height:min(58vh,520px); min-height:330px; border:1px solid var(--border);
+            border-radius:24px; background:radial-gradient(circle at 50% 40%, rgba(27,42,74,.85), rgba(11,18,32,.9) 70%);
+            overflow:hidden; box-shadow:0 30px 80px rgba(0,0,0,.5); }
+    .demo > div.cv { position:absolute; inset:0; }
+    .demo .cap { position:absolute; left:16px; bottom:14px; z-index:3; font-size:.8rem; color:var(--muted);
+                 padding:6px 12px; border-radius:999px; background:rgba(11,18,32,.75); border:1px solid var(--border); }
+    .demo .cap b { color:var(--text); }
+
+    section { max-width:1250px; margin:0 auto; padding:7vh 6vw; }
+    h2 { margin:0 0 10px; font-size:clamp(1.6rem,3vw,2.2rem); }
+    .sub { margin:0 0 34px; color:var(--muted); max-width:38em; line-height:1.6; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; }
+    .card { padding:24px; background:var(--panel); border:1px solid var(--border); border-radius:18px;
+            backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); transition:transform .15s, border-color .15s; }
+    .card:hover { transform:translateY(-4px); border-color:rgba(94,234,212,.5); }
+    .card h3 { margin:0 0 8px; font-size:1.1rem; }
+    .card p { margin:0; color:var(--muted); line-height:1.6; font-size:.95rem; }
+    .num { display:inline-grid; place-items:center; width:34px; height:34px; margin-bottom:12px; font-weight:800;
+           color:#04211d; border-radius:10px; background:linear-gradient(90deg,var(--accent),var(--accent-2)); }
+
+    .final { text-align:center; }
+    .final .box { padding:48px 24px; border:1px solid var(--border); border-radius:26px;
+                  background:linear-gradient(135deg,rgba(94,234,212,.12),rgba(56,189,248,.1)); }
+    footer { text-align:center; padding:26px 16px 34px; font-size:.85rem; color:var(--muted); }
+    footer a { color:var(--accent); text-decoration:none; }
+    footer a:hover { text-decoration:underline; }
+
+    @media (max-width: 880px) {
+      .hero { grid-template-columns:1fr; padding-top:2vh; min-height:auto; }
+      .demo { order:-1; height:42vh; }
+      nav .link.hide-sm { display:none; }
+    }
+    @media (prefers-reduced-motion: reduce) { .bg-video { display:none; } html { scroll-behavior:auto; } .btn, .card { transition:none; } }
+  </style>
+</head>
+<body>
+  <video class="bg-video" autoplay muted loop playsinline>
+    <source src="{{ url_for('static', filename='bg.mp4') }}" type="video/mp4">
+  </video>
+  <div class="bg-overlay"></div>
+
+  <nav>
+    <a class="logo" href="/">ChemVerse3D</a>
+    <a class="link hide-sm" href="#features">Features</a>
+    <a class="link hide-sm" href="#how">How it works</a>
+    <a class="link" href="/quiz">Quiz</a>
+    <a class="link" href="/compare">Compare</a>
+    <a class="btn primary" style="padding:10px 18px;font-size:.92rem" href="/search">Open app</a>
+  </nav>
+
+  <header class="hero">
+    <div>
+      <span class="eyebrow">Free and open · no sign-up needed</span>
+      <h1>See chemistry <span>in 3D</span>.</h1>
+      <p class="lead">Search any molecule, rotate it, read its bonds and atoms, hear an AI teacher explain it, compare two molecules and test yourself with a quiz.</p>
+      <div class="cta">
+        <a class="btn primary" href="/search">Start exploring</a>
+        <a class="btn" href="/quiz">Take the quiz</a>
+        <a class="btn" href="/compare">Compare molecules</a>
+      </div>
+      <div class="stats">
+        <div><b>{{ count }}+</b><span>built-in molecules</span></div>
+        <div><b>Any</b><span>molecule via PubChem</span></div>
+        <div><b>3D</b><span>live, interactive</span></div>
+      </div>
+    </div>
+
+    <div class="demo" aria-label="Interactive 3D model of caffeine">
+      <div class="cv" id="demo-view"></div>
+      <div class="cap"><b>{{ demo.title }}</b> · drag to rotate · scroll to zoom</div>
+    </div>
+  </header>
+
+  <section id="features">
+    <h2>Everything you need to understand a molecule</h2>
+    <p class="sub">Built for students, teachers and curious people. Open it and start; there is nothing to install or sign up for.</p>
+    <div class="grid">
+      <div class="card"><h3>Live 3D viewer</h3><p>Rotate, zoom and switch between ball and stick, stick, space-filling and wireframe views. Hover any atom to see its element.</p></div>
+      <div class="card"><h3>Structure notation in 3D</h3><p>See the name and formula in the scene, colour-coded atoms, and bond labels like C–H, C=O and C≡N right on the molecule.</p></div>
+      <div class="card"><h3>Search anything</h3><p>Pick from the built-in list or look up any compound on PubChem, such as dopamine, ibuprofen or vitamin C.</p></div>
+      <div class="card"><h3>AI teacher</h3><p>Get a student-friendly explanation, hear it read aloud, and ask follow-up questions about the molecule.</p></div>
+      <div class="card"><h3>Compare</h3><p>Put two molecules side by side with a table of differences and a short AI summary.</p></div>
+      <div class="card"><h3>Quiz mode</h3><p>Identify molecules in 3D, recall formulas and count atoms. Beat your best score.</p></div>
+    </div>
+  </section>
+
+  <section id="how">
+    <h2>How it works</h2>
+    <p class="sub">Three steps from a name to a molecule you can turn around in your hands.</p>
+    <div class="grid">
+      <div class="card"><div class="num">1</div><h3>Search</h3><p>Type a molecule name. Suggestions appear as you type.</p></div>
+      <div class="card"><div class="num">2</div><h3>Explore</h3><p>Rotate it, turn on labels and bond notation, and watch it vibrate.</p></div>
+      <div class="card"><div class="num">3</div><h3>Learn</h3><p>Read or hear the explanation, compare with another molecule, then take the quiz.</p></div>
+    </div>
+  </section>
+
+  <section class="final">
+    <div class="box">
+      <h2>Ready to explore?</h2>
+      <p class="sub" style="margin:0 auto 24px">Open the app and search your first molecule.</p>
+      <a class="btn primary" href="/search">Open ChemVerse3D</a>
+    </div>
+  </section>
+
+  <footer>Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></footer>
+
+  <script>
+    (function () {
+      // the demo is decoration; if WebGL or the CDN is unavailable the rest of the page still works
+      try {
+        const info = {{ demo | tojson }};
+        const names = {}; info.elements.forEach(e => names[e.symbol] = e.name);
+        const mv = new MolView(document.getElementById("demo-view"),
+          { colors: info.colors, names, title: info.title, formula: info.formula, showTitle: false, spin: true });
+        mv.load(info.molblock);
+        window.addEventListener("resize", () => mv.resize());
+      } catch (e) { console.warn("3D demo unavailable:", e); }
+    })();
+  </script>
+</body>
+</html>

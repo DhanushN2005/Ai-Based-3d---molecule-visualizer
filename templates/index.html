@@ -133,7 +133,7 @@
 
   <main>
     <div class="card">
-      <h1>ChemVerse3D</h1>
+      <h1><a href="/" style="color:inherit;text-decoration:none">ChemVerse3D</a></h1>
       <p class="sub">Search any molecule (built-in list or PubChem) and explore it in 3D.</p>
 
       <form id="molForm" autocomplete="off">
@@ -187,7 +187,7 @@
       try {
         const body = new FormData();
         body.append("molecule", name);
-        const res = await fetch("/", { method: "POST", body });
+        const res = await fetch("/search", { method: "POST", body });
         const data = await res.json();
         if (data.success) {
           redirectURL = data.viewer_url;

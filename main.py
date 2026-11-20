@@ -406,8 +406,14 @@ def _build_from_form():
         return jsonify(success=False, error="Something went wrong building that molecule.")
 
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
+@app.route('/')
+def cover():
+    """Landing page: explains the app and links to the search. No login needed."""
+    return render_template('cover.html', demo=molecule_info("caffeine"), count=len(molecule_db))
+
+
+@app.route('/search', methods=['GET', 'POST'])
+def search():
     if request.method == 'POST':
         return _build_from_form()
     return render_template('index.html', molecules=sorted(molecule_db))
