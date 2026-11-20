@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Compare molecules · 3D Molecule Visualizer</title>
+  <title>Compare molecules · ChemVerse3D</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
   <style>
@@ -48,13 +48,16 @@
     .panel h3 { margin:0 0 8px; font-size:.8rem; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
     #ai { margin:0; line-height:1.75; color:#e2e8f0; white-space:pre-wrap; }
     @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:14px; } }
+    .site-credit { text-align:center; padding:22px 16px 28px; font-size:.82rem; color:#94a3b8; }
+    .site-credit a { color:#5eead4; text-decoration:none; }
+    .site-credit a:hover { text-decoration:underline; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <a href="/">← Home</a>
-    <span class="brand">🧪 3D Molecule Visualizer</span>
-    <a href="/quiz">🎯 Quiz</a>
+    <span class="brand">ChemVerse3D</span>
+    <a href="/quiz">Quiz</a>
   </div>
 
   <main>
@@ -63,7 +66,7 @@
       <span class="vs">vs</span>
       <input type="text" name="b" id="b" list="mols" placeholder="Second molecule" value="{{ b.name if b else request.args.get('b','') }}" required>
       <button class="btn primary" type="submit">Compare</button>
-      <button class="btn" type="button" id="swap" title="Swap">⇄</button>
+      <button class="btn" type="button" id="swap" title="Swap">Swap</button>
     </form>
     <datalist id="mols">{% for m in molecules %}<option value="{{ m }}">{% endfor %}</datalist>
     <p class="empty" style="padding:0;margin:-8px 0 14px;font-size:.85rem">Built-in names work offline. Any other name is looked up on PubChem.</p>
@@ -78,7 +81,7 @@
         <option value="symnoh">Symbols (no H)</option><option value="name">Element names</option></select>
       <select id="bond-sel"><option value="off">Bonds: off</option><option value="order">Bonds: – = ≡</option>
         <option value="pair">Bonds: C=O, C–H…</option></select>
-      <button class="btn" id="spin-btn" type="button">⏸ Stop rotation</button>
+      <button class="btn" id="spin-btn" type="button">Stop rotation</button>
     </div>
 
     <div class="grid">
@@ -119,7 +122,7 @@
     $("bond-sel").addEventListener("change", e => all(v => v.setBondLabels(e.target.value)));
     $("spin-btn").addEventListener("click", e => {
       const on = !views[0].spinning; all(v => v.spin(on));
-      e.currentTarget.textContent = on ? "⏸ Stop rotation" : "▶ Rotate";
+      e.currentTarget.textContent = on ? "Stop rotation" : "Rotate";
     });
     window.addEventListener("resize", () => all(v => v.resize()));
     $("swap").addEventListener("click", () => { const t = $("a").value; $("a").value = $("b").value; $("b").value = t; });
@@ -149,5 +152,6 @@
       .catch(() => { $("ai").textContent = "Could not load the AI comparison."; });
   </script>
   {% endif %}
+  <footer class="site-credit">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></footer>
 </body>
 </html>

@@ -180,7 +180,7 @@ def pubchem_lookup(query):
         res = requests.get(
             f"{PUBCHEM}/pug/compound/name/{quote(query, safe='')}/property/SMILES,Title/JSON",
             timeout=15,
-            headers={"User-Agent": "molecule-visualizer"},
+            headers={"User-Agent": "chemverse3d"},
         )
     except requests.RequestException:
         raise MoleculeError("Could not reach PubChem. Check your internet connection.")
@@ -472,7 +472,7 @@ def suggest():
     names = [n for n in sorted(molecule_db) if q in n][:5]
     try:
         res = requests.get(f"{PUBCHEM}/autocomplete/compound/{quote(q, safe='')}/json?limit=8",
-                           timeout=6, headers={"User-Agent": "molecule-visualizer"})
+                           timeout=6, headers={"User-Agent": "chemverse3d"})
         if res.ok:
             for n in res.json().get("dictionary_terms", {}).get("compound", []):
                 n = slugify(n)

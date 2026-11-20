@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{{ molecule|capitalize }} · 3D Molecule Visualizer</title>
+  <title>{{ molecule|capitalize }} · ChemVerse3D</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
   <style>
@@ -33,7 +33,7 @@
              display: flex; flex-direction: column;
              border: 1px solid var(--border); border-radius: 18px; background: #0b1220; }
     #viewer-box { position: relative; flex: 1; min-height: 0; }
-    .toolbar { position: relative; z-index: 5; padding: 10px;
+    .toolbar { order: -1; position: relative; z-index: 5; padding: 10px;
                display: flex; flex-wrap: wrap; gap: 6px;
                border-bottom: 1px solid var(--border); background: rgba(15,23,42,.6); }
     .tbtn { padding: 7px 11px; font-size: .85rem; color: var(--text); cursor: pointer;
@@ -90,19 +90,22 @@
       .layout { grid-template-columns: 1fr; padding: 14px; }
       .stage { height: 60vh; }
     }
+    .site-credit { text-align:center; padding:22px 16px 28px; font-size:.82rem; color:#94a3b8; }
+    .site-credit a { color:#5eead4; text-decoration:none; }
+    .site-credit a:hover { text-decoration:underline; }
   </style>
 </head>
 
 <body>
   <div class="topbar">
     <a class="back" href="/">← Home</a>
-    <span class="brand">🧪 3D Molecule Visualizer</span>
-    <a class="back" href="/quiz">🎯 Quiz</a>
-    <a class="back" id="compare-link" href="/compare">⚖️ Compare</a>
+    <span class="brand">ChemVerse3D</span>
+    <a class="back" href="/quiz">Quiz</a>
+    <a class="back" id="compare-link" href="/compare">Compare</a>
     <form class="search" id="jump-form" autocomplete="off">
       <input type="text" id="jump" list="all-mols" placeholder="Search molecule…">
       <button class="btn" type="submit">Go</button>
-      <button class="btn" type="button" id="random-btn" title="Random molecule">🎲</button>
+      <button class="btn" type="button" id="random-btn" title="Random molecule">Random</button>
     </form>
     <datalist id="all-mols">{% for m in molecules %}<option value="{{ m }}">{% endfor %}</datalist>
   </div>
@@ -129,13 +132,13 @@
           <option value="order">Bonds: – = ≡</option>
           <option value="pair">Bonds: C=O, C–H…</option>
         </select>
-        <button class="tbtn on" id="title-btn" type="button">🏷 Name</button>
-        <button class="tbtn on" id="spin-btn" type="button">⟳ Rotate</button>
-        <button class="tbtn" id="vib-btn" type="button">〰 Vibrate</button>
-        <button class="tbtn" id="bg-btn" type="button">☀ Background</button>
-        <button class="tbtn" id="reset-btn" type="button">⌖ Reset view</button>
-        <button class="tbtn" id="shot-btn" type="button">📷 Screenshot</button>
-        <button class="tbtn" id="full-btn" type="button">⛶ Fullscreen</button>
+        <button class="tbtn on" id="title-btn" type="button">Name</button>
+        <button class="tbtn on" id="spin-btn" type="button">Rotate</button>
+        <button class="tbtn" id="vib-btn" type="button">Vibrate</button>
+        <button class="tbtn" id="bg-btn" type="button">Background</button>
+        <button class="tbtn" id="reset-btn" type="button">Reset view</button>
+        <button class="tbtn" id="shot-btn" type="button">Screenshot</button>
+        <button class="tbtn" id="full-btn" type="button">Fullscreen</button>
       </div>
       <div class="hint">Drag to rotate · scroll to zoom · hover an atom for its name</div>
     </div>
@@ -160,8 +163,8 @@
         <h2>About</h2>
         <p id="explanation"></p>
         <div class="row speech" id="speech-row">
-          <button class="btn primary" id="speak-btn" type="button">🔊 Speak</button>
-          <button class="btn" id="pause-btn" type="button" disabled>⏸ Pause</button>
+          <button class="btn primary" id="speak-btn" type="button">Speak</button>
+          <button class="btn" id="pause-btn" type="button" disabled>Pause</button>
           <select id="voice-sel" title="Voice"></select>
           <label>Speed <input type="range" id="rate" min="0.6" max="1.6" step="0.1" value="1"></label>
         </div>
@@ -181,14 +184,14 @@
           <button class="btn primary" type="submit" id="ask-btn">Ask</button>
         </form>
         <p id="answer"></p>
-        <button class="btn" id="speak-answer" type="button" style="display:none;margin-top:8px">🔊 Read answer</button>
+        <button class="btn" id="speak-answer" type="button" style="display:none;margin-top:8px">Read answer</button>
       </div>
 
       <div class="panel">
         <h2>Download</h2>
         <div class="row">
-          {% if has_glb %}<a class="btn" href="/outputs/{{ molecule | urlencode }}.glb" download>⬇ .glb (3D / AR)</a>{% endif %}
-          <button class="btn" id="dl-sdf" type="button">⬇ .sdf</button>
+          {% if has_glb %}<a class="btn" href="/outputs/{{ molecule | urlencode }}.glb" download>Download .glb (3D / AR)</a>{% endif %}
+          <button class="btn" id="dl-sdf" type="button">Download .sdf</button>
         </div>
       </div>
     </aside>
@@ -323,8 +326,8 @@
       speakToken++;
       synth.cancel();
       mainSpans.forEach(s => s.classList.remove("now"));
-      speakBtn.textContent = "🔊 Speak"; $("speak-answer").textContent = "🔊 Read answer";
-      pauseBtn.disabled = true; pauseBtn.textContent = "⏸ Pause";
+      speakBtn.textContent = "Speak"; $("speak-answer").textContent = "Read answer";
+      pauseBtn.disabled = true; pauseBtn.textContent = "Pause";
       activeBtn = null;
     }
 
@@ -333,7 +336,7 @@
       stopSpeech();
       $("speech-note").textContent = "";
       const token = ++speakToken;
-      activeBtn = btn; btn.textContent = "⏹ Stop"; pauseBtn.disabled = false;
+      activeBtn = btn; btn.textContent = "Stop"; pauseBtn.disabled = false;
       const voice = synth.getVoices().find(v => v.name === $("voice-sel").value);
       let i = 0;
       const next = () => {
@@ -366,8 +369,8 @@
       synth.onvoiceschanged = fillVoices;
       speakBtn.addEventListener("click", () => speak(mainSentences, mainSpans, speakBtn));
       pauseBtn.addEventListener("click", () => {
-        if (synth.paused) { synth.resume(); pauseBtn.textContent = "⏸ Pause"; }
-        else { synth.pause(); pauseBtn.textContent = "▶ Resume"; }
+        if (synth.paused) { synth.resume(); pauseBtn.textContent = "Pause"; }
+        else { synth.pause(); pauseBtn.textContent = "Resume"; }
       });
       $("speak-answer").addEventListener("click", e =>
         speak(splitSentences($("answer").textContent), null, e.currentTarget));
@@ -401,5 +404,6 @@
       if (e.target.classList.contains("chip")) { $("question").value = e.target.textContent; ask(e.target.textContent); }
     });
   </script>
+  <footer class="site-credit">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></footer>
 </body>
 </html>

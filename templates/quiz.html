@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Quiz · 3D Molecule Visualizer</title>
+  <title>Quiz · ChemVerse3D</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/3Dmol/2.4.2/3Dmol-min.js" integrity="sha384-zxWwO8usW1MzUHquSL3foT+Cw2ndelPQ5bNzHVYdKGiJ0vqvqQ8Y9XeKLmotffmQ" crossorigin="anonymous"></script>
   <script src="{{ url_for('static', filename='js/molview.js') }}"></script>
   <style>
@@ -46,18 +46,20 @@
     ul.review { text-align:left; padding-left:18px; line-height:1.7; }
     .hide { display:none !important; }
     @media (max-width:560px) { .opts { grid-template-columns:1fr; } main { padding:14px; } }
+    .site-credit { text-align:center; padding:22px 16px 28px; font-size:.82rem; color:#94a3b8; }
+    .site-credit a { color:#5eead4; text-decoration:none; }
+    .site-credit a:hover { text-decoration:underline; }
   </style>
 </head>
 <body>
   <div class="topbar">
     <a href="/">← Home</a>
-    <span class="brand">🧪 3D Molecule Visualizer</span>
-    <a href="/compare">⚖️ Compare</a>
+    <span class="brand">ChemVerse3D</span>
+    <a href="/compare">Compare</a>
   </div>
 
   <main>
     <section class="card center" id="start">
-      <div style="font-size:42px">🎯</div>
       <h1>Molecule Quiz</h1>
       <p class="muted">10 questions: identify molecules in 3D, recall formulas and count atoms.</p>
       <p class="muted" id="best"></p>
@@ -126,7 +128,7 @@
       const q = questions[idx];
       $("progress").textContent = "Question " + (idx + 1) + " / " + questions.length;
       $("score").textContent = "Score " + score;
-      $("streak").textContent = streak > 1 ? "🔥 " + streak + " in a row" : "";
+      $("streak").textContent = streak > 1 ? streak + " in a row" : "";
       $("bar").style.width = (idx / questions.length * 100) + "%";
       $("q-text").textContent = q.text;
       $("feedback").innerHTML = "";
@@ -166,7 +168,7 @@
           " Correct answer: <b>" + (isFormula(q.type) ? sub(q.options[q.answer]) : q.options[q.answer]) + "</b>";
       }
       $("score").textContent = "Score " + score;
-      $("streak").textContent = streak > 1 ? "🔥 " + streak + " in a row" : "";
+      $("streak").textContent = streak > 1 ? streak + " in a row" : "";
       $("bar").style.width = ((idx + 1) / questions.length * 100) + "%";
       const next = $("next-btn");
       next.textContent = idx + 1 < questions.length ? "Next →" : "See results";
@@ -184,7 +186,7 @@
       const total = questions.length;
       $("final").textContent = score + " / " + total;
       const ratio = score / total;
-      $("verdict").textContent = ratio === 1 ? "Perfect! 🏆" : ratio >= 0.7 ? "Great job! 🎉"
+      $("verdict").textContent = ratio === 1 ? "Perfect!" : ratio >= 0.7 ? "Great job!"
         : ratio >= 0.4 ? "Good start, keep practising." : "Review the molecules and try again.";
       if (score > store.get()) { store.set(score); $("verdict").textContent += " New best score!"; }
       const list = $("review"); list.innerHTML = "";
@@ -197,5 +199,6 @@
       showBest();
     }
   </script>
+  <footer class="site-credit">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></footer>
 </body>
 </html>

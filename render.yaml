@@ -2,7 +2,7 @@
 # Deploy: Render dashboard -> New -> Blueprint -> pick this repo.
 services:
   - type: web
-    name: molecule-visualizer
+    name: chemverse3d
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt

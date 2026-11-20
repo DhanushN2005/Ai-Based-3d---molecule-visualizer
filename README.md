@@ -1,4 +1,4 @@
-# AI-Based 3D Molecule Visualizer 🎥🧪
+# ChemVerse3D
 
 An AI-powered web app for **exploring chemical molecules in 3D**. Search any molecule, rotate it, read its structure notation, hear an AI explanation, compare it with another molecule, and test yourself with a quiz.
 
@@ -180,7 +180,7 @@ The repo includes a `render.yaml` blueprint.
 1. Push the repo to GitHub. Never commit `.env`.
 2. On [render.com](https://render.com): **New → Blueprint**, choose this repo, and approve the plan (`free`).
 3. When asked, paste your `GROQ_API_KEY` (it is stored in Render, not in git).
-4. Wait for the build. Your app is at `https://molecule-visualizer.onrender.com` (or the name Render gives you).
+4. Wait for the build. Your app is at `https://chemverse3d.onrender.com` (or the name Render gives you).
 
 What the blueprint sets:
 - **Start command:** `gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT`. One worker on purpose: the rate limiter and caches live in memory.
@@ -192,6 +192,12 @@ Free-tier behaviour to expect (check Render's pricing page for current limits):
 - The service sleeps after about 15 minutes idle; the first visit then takes 30 to 60 seconds.
 - The disk resets on restart. That is fine: `.glb` files and the PubChem cache are rebuilt on demand.
 - gunicorn does not run on Windows. Use `python main.py` locally.
+
+## Built by
+
+**Dhanush Nataraj**. Portfolio: [dhanushnataraj.netlify.app](https://dhanushnataraj.netlify.app)
+
+ChemVerse3D is a personal project that combines chemistry (RDKit, PubChem), 3D graphics (3Dmol.js, trimesh) and AI (Groq) in one Flask web app.
 
 ## Troubleshooting
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>3D Molecule Visualizer</title>
+  <title>ChemVerse3D</title>
   <style>
     :root {
       --accent: #5eead4;
@@ -102,6 +102,9 @@
     .links a { padding: 8px 14px; font-size: .9rem; color: var(--text); text-decoration: none;
                background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.18); border-radius: 10px; }
     .links a:hover { background: rgba(94,234,212,.2); }
+    .credit { margin: 22px 0 0; font-size: .82rem; color: var(--muted); }
+    .credit a { color: var(--accent); text-decoration: none; }
+    .credit a:hover { text-decoration: underline; }
     #status { margin-top: 20px; min-height: 1.4em; font-size: .95rem; color: var(--muted); }
     .spinner {
       display: inline-block; width: 14px; height: 14px; margin-right: 8px;
@@ -130,8 +133,7 @@
 
   <main>
     <div class="card">
-      <div class="logo" aria-hidden="true">🧪</div>
-      <h1>3D Molecule Visualizer</h1>
+      <h1>ChemVerse3D</h1>
       <p class="sub">Search any molecule (built-in list or PubChem) and explore it in 3D.</p>
 
       <form id="molForm" autocomplete="off">
@@ -148,11 +150,12 @@
       </div>
 
       <div class="links">
-        <a href="/quiz">🎯 Quiz mode</a>
-        <a href="/compare">⚖️ Compare two molecules</a>
+        <a href="/quiz">Quiz mode</a>
+        <a href="/compare">Compare two molecules</a>
       </div>
 
       <div id="status" role="status" aria-live="polite"></div>
+      <p class="credit">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></p>
       <div id="manual-link">
         <button type="button" class="secondary" id="go-btn">Go to viewer</button>
       </div>
