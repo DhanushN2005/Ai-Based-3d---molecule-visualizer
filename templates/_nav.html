@@ -1,0 +1,73 @@
+{#- Shared site header. Set these before including (all optional):
+      nav_variant : '' (default), 'overlay' (over the search background video) or 'cover' (landing page)
+      nav_extra   : extra markup shown in the menu, e.g. the viewer's molecule search box
+      nav_compare : href for the Compare link, e.g. "/compare?a=caffeine" -#}
+{% set _p = request.path %}
+<style>
+  .cv-nav { position:relative; z-index:60; display:flex; align-items:center; gap:20px; padding:14px max(20px, 4vw);
+            border-bottom:1px solid rgba(255,255,255,.1); background:rgba(11,18,32,.82);
+            -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+            font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  .cv-nav--overlay { background:rgba(11,18,32,.5); border-bottom-color:transparent; }
+  .cv-nav--cover { background:transparent; border-bottom:none; padding-top:18px; padding-bottom:18px;
+                   -webkit-backdrop-filter:none; backdrop-filter:none; }
+  .cv-brand { font-weight:800; font-size:1.18rem; letter-spacing:.2px; text-decoration:none; white-space:nowrap;
+              background:linear-gradient(90deg,#5eead4,#38bdf8); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .cv-toggle { position:absolute; opacity:0; pointer-events:none; }
+  .cv-burger { display:none; margin-left:auto; padding:8px 14px; font-size:.9rem; color:#f1f5f9; cursor:pointer;
+               border:1px solid rgba(255,255,255,.2); border-radius:10px; user-select:none; }
+  .cv-toggle:focus-visible + .cv-burger { outline:2px solid #5eead4; outline-offset:2px; }
+  .cv-links { display:flex; align-items:center; gap:22px; margin-left:auto; font-size:.95rem; }
+  .cv-links > a, .cv-account a, .cv-account button { font:inherit; color:#a8b4c7; text-decoration:none; white-space:nowrap;
+                                  background:none; border:none; padding:0; cursor:pointer; }
+  .cv-links > a:hover, .cv-account a:hover, .cv-account button:hover { color:#f1f5f9; }
+  .cv-links a[aria-current="page"] { color:#5eead4; font-weight:600; }
+  .cv-links > a:focus-visible, .cv-account a:focus-visible, .cv-account button:focus-visible { outline:2px solid #5eead4; outline-offset:3px; border-radius:4px; }
+  .cv-links > .cv-cta { padding:9px 16px; font-weight:700; color:#04211d; border-radius:10px;
+                      background:linear-gradient(90deg,#5eead4,#38bdf8); }
+  .cv-links > .cv-cta:hover { color:#04211d; filter:brightness(1.06); }
+  .cv-nav--overlay { position:absolute; left:0; right:0; top:0; }
+  .cv-account { display:flex; align-items:center; gap:16px; padding-left:22px; border-left:1px solid rgba(255,255,255,.16); }
+  .cv-account form { margin:0; }
+  .cv-who { color:#f1f5f9; font-weight:600; }
+  .cv-extra { display:flex; align-items:center; }
+  @media (max-width: 860px) {
+    .cv-burger { display:inline-block; }
+    .cv-links { display:none; position:absolute; left:0; right:0; top:100%; flex-direction:column; align-items:stretch;
+                gap:0; margin:0; padding:6px 20px 16px; background:#0b1220; border-bottom:1px solid rgba(255,255,255,.14);
+                box-shadow:0 18px 30px rgba(0,0,0,.45); }
+    .cv-links > a, .cv-account > a, .cv-account > .cv-who, .cv-account button { padding:13px 0; text-align:left; }
+    .cv-links > a { border-bottom:1px solid rgba(255,255,255,.07); }
+    .cv-links > .cv-cta { margin-top:10px; text-align:center; padding:12px 16px; }
+    .cv-toggle:checked ~ .cv-links { display:flex; }
+    .cv-account { flex-direction:column; align-items:stretch; gap:0; padding:0; border-left:none; }
+    .cv-extra { padding:12px 0; }
+  }
+  @media (prefers-reduced-motion: no-preference) { .cv-links a, .cv-links button { transition:color .15s; } }
+</style>
+<header class="cv-nav{% if nav_variant %} cv-nav--{{ nav_variant }}{% endif %}">
+  <a class="cv-brand" href="/">ChemVerse3D</a>
+  <input type="checkbox" id="cv-nav-toggle" class="cv-toggle" aria-label="Show or hide the menu">
+  <label for="cv-nav-toggle" class="cv-burger">Menu</label>
+  <nav class="cv-links" aria-label="Main">
+    {% if nav_variant == 'cover' %}
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    {% endif %}
+    {% if nav_variant != 'cover' %}<a href="/search"{% if _p == '/search' %} aria-current="page"{% endif %}>Search</a>{% endif %}
+    <a href="{{ nav_compare or '/compare' }}"{% if _p == '/compare' %} aria-current="page"{% endif %}>Compare</a>
+    <a href="/quiz"{% if _p == '/quiz' %} aria-current="page"{% endif %}>Quiz</a>
+    <a href="/leaderboard"{% if _p == '/leaderboard' %} aria-current="page"{% endif %}>Leaderboard</a>
+    {% if nav_extra %}<span class="cv-extra">{{ nav_extra }}</span>{% endif %}
+    <span class="cv-account">
+      {% if current_user %}
+        <a href="/favorites"{% if _p == '/favorites' %} aria-current="page"{% endif %}>Favourites</a>
+        <span class="cv-who">{{ current_user.username }}</span>
+        <form method="post" action="/logout"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit">Log out</button></form>
+      {% else %}
+        <a href="/login"{% if _p in ('/login', '/register') %} aria-current="page"{% endif %}>Log in</a>
+      {% endif %}
+    </span>
+    {% if nav_variant == 'cover' %}<a class="cv-cta" href="/search">Open app</a>{% endif %}
+  </nav>
+</header>

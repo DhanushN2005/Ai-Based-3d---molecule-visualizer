@@ -255,7 +255,7 @@ The repo includes a `render.yaml` blueprint.
 What the blueprint sets:
 - **Start command:** `gunicorn main:app --workers 1 --threads 4 --timeout 120 --bind 0.0.0.0:$PORT`. One worker on purpose: the rate limiter and caches live in memory.
 - **`TRUST_PROXY=1`** so rate limits work per visitor.
-- **Python 3.11.9** and a health check on `/healthz`.
+- **Python 3.12.7** (set `PYTHON_VERSION`; without it Render picks its newest Python, 3.14 at the time of writing, which I have not tested) and a health check on `/healthz`.
 
 Accounts, favourites and leaderboard scores live in the database. Render's free web service has an ephemeral disk, so with the default SQLite file they are **wiped on every redeploy**. To keep them, create a free hosted Postgres (for example Neon or Supabase) and add its connection string as the `DATABASE_URL` environment variable in the Render dashboard. The app has been run against a real hosted Postgres (Neon, PostgreSQL 18): sign-up, favourites, the quiz, the leaderboard query and the molecule cache all worked. The automated tests always use a throwaway SQLite file, and refuse to run against any other database.
 

@@ -1,4 +1,4 @@
-"""Database models. SQLite by default, any SQLAlchemy URL (for example Postgres) via DATABASE_URL."""
+"""Database models. SQLite by default, Postgres (or any SQLAlchemy URL) via DATABASE_URL."""
 import os
 from datetime import datetime, timezone
 
@@ -15,8 +15,11 @@ def database_url(data_dir):
     """DATABASE_URL if set (Render/Heroku style postgres:// is normalised), else a SQLite file in data_dir."""
     url = os.environ.get("DATABASE_URL", "").strip()
     if url:
-        if url.startswith("postgres://"):
-            url = "postgresql://" + url[len("postgres://"):]
+        # Name the driver explicitly. A bare "postgresql://" means psycopg2 in SQLAlchemy 2.0 but the
+        # newer psycopg (v3) in 2.1+, and requirements.txt installs psycopg2-binary.
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg2://" + url[len(prefix):]
         return url
     os.makedirs(data_dir, exist_ok=True)
     return "sqlite:///" + os.path.abspath(os.path.join(data_dir, "app.db")).replace("\\", "/")

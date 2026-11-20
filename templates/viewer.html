@@ -88,6 +88,7 @@
     .chip:hover { color: var(--text); background: rgba(94,234,212,.15); }
     #answer { margin: 8px 0 0; line-height: 1.7; color: #e2e8f0; white-space: pre-wrap; }
     #answer.err { color: #fca5a5; }
+    @media (max-width: 860px) { .search { width:100%; } .search input { flex:1; } }
     @media (max-width: 960px) {
       .layout { grid-template-columns: 1fr; padding: 14px; }
       .stage { height: 60vh; }
@@ -99,19 +100,14 @@
 </head>
 
 <body>
-  <div class="topbar">
-    <a class="back" href="/">← Home</a>
-    <span class="brand">ChemVerse3D</span>
-    <a class="back" href="/quiz">Quiz</a>
-    <a class="back" id="compare-link" href="/compare">Compare</a>
-    {% include "_account.html" %}
-    <form class="search" id="jump-form" autocomplete="off">
-      <input type="text" id="jump" list="all-mols" placeholder="Search molecule…">
+  {% set nav_compare = '/compare?a=' ~ (molecule | urlencode) %}
+  {% set nav_extra %}<form class="search" id="jump-form" autocomplete="off">
+      <input type="text" id="jump" list="all-mols" placeholder="Search molecule…" aria-label="Search molecule">
       <button class="btn" type="submit">Go</button>
       <button class="btn" type="button" id="random-btn" title="Random molecule">Random</button>
-    </form>
-    <datalist id="all-mols">{% for m in molecules %}<option value="{{ m }}">{% endfor %}</datalist>
-  </div>
+    </form>{% endset %}
+  {% include "_nav.html" %}
+  <datalist id="all-mols">{% for m in molecules %}<option value="{{ m }}">{% endfor %}</datalist>
 
   <div class="layout">
     <div class="stage" id="stage">
@@ -234,7 +230,6 @@
         }
       } finally { favBtn.disabled = false; }
     });
-    $("compare-link").href = "/compare?a=" + encodeURIComponent(NAME);
 
     const NAME_OF = {};
     MOL.elements.forEach(e => {

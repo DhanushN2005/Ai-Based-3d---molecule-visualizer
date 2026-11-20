@@ -4,11 +4,7 @@
 * { box-sizing: border-box; }
 body { margin:0; min-height:100vh; color:var(--text); background:var(--bg);
        font-family: system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-.topbar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 24px; border-bottom:1px solid var(--border); }
-.topbar a { color:var(--muted); text-decoration:none; }
-.topbar a:hover { color:var(--accent); }
-.brand { font-weight:600; margin-right:auto; color:var(--text) !important; }
-main { max-width:720px; margin:0 auto; padding:32px 20px 60px; }
+main { max-width:720px; margin:0 auto; padding:clamp(24px, 7vh, 72px) 20px 60px; }
 .card { background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:28px; }
 h1 { margin:0 0 6px; font-size:1.7rem; }
 .muted { color:var(--muted); }

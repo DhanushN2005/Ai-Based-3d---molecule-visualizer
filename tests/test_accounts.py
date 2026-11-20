@@ -366,11 +366,21 @@ def test_oversized_request_bodies_are_rejected(client):
     assert resp.status_code == 413 and resp.get_json()["success"] is False
 
 
-def test_database_url_normalises_postgres_scheme(monkeypatch, tmp_path):
-    monkeypatch.setenv("DATABASE_URL", "postgres://user:pw@host/db")
-    assert database_url(str(tmp_path)) == "postgresql://user:pw@host/db"
-    monkeypatch.delenv("DATABASE_URL")
-    assert database_url(str(tmp_path)).startswith("sqlite:///") and (tmp_path / "").exists()
+@pytest.mark.parametrize("given,expected", [
+    ("postgres://user:pw@host/db", "postgresql+psycopg2://user:pw@host/db"),          # Heroku/Render style
+    ("postgresql://user:pw@host/db?sslmode=require", "postgresql+psycopg2://user:pw@host/db?sslmode=require"),
+    ("postgresql+psycopg://user:pw@host/db", "postgresql+psycopg://user:pw@host/db"),  # explicit driver is kept
+    ("mysql://user:pw@host/db", "mysql://user:pw@host/db"),
+])
+def test_database_url_pins_the_postgres_driver(monkeypatch, tmp_path, given, expected):
+    monkeypatch.setenv("DATABASE_URL", given)
+    assert database_url(str(tmp_path)) == expected
+
+
+def test_database_url_defaults_to_a_sqlite_file(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    assert database_url(str(tmp_path / "data")).startswith("sqlite:///")
+    assert (tmp_path / "data").exists()
 
 
 # ------------------------------------------------ crediting a guest's last quiz

@@ -17,7 +17,7 @@
     .topbar a { color:var(--muted); text-decoration:none; }
     .topbar a:hover { color:var(--accent); }
     .brand { font-weight:600; margin-right:auto; }
-    main { max-width:760px; margin:0 auto; padding:24px; }
+    main { max-width:760px; margin:0 auto; padding:clamp(20px, 6vh, 56px) 20px 40px; }
     .card { background:var(--panel); border:1px solid var(--border); border-radius:18px; padding:26px; }
     h1 { margin:0 0 6px; font-size:1.7rem; }
     .muted { color:var(--muted); }
@@ -30,7 +30,7 @@
     .bar > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--accent),var(--accent-2)); transition:width .3s; }
     .meta { display:flex; justify-content:space-between; font-size:.85rem; color:var(--muted); }
     #q-text { font-size:1.25rem; margin:4px 0 14px; }
-    #q-view { position:relative; height:300px; margin-bottom:16px; border-radius:14px; overflow:hidden;
+    #q-view { position:relative; height:320px; margin-bottom:16px; border-radius:14px; overflow:hidden;
               border:1px solid var(--border); background:#0b1220; display:none; }
     #q-view > div { position:absolute; inset:0; }
     .opts { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
@@ -57,12 +57,7 @@
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <a href="/">← Home</a>
-    <span class="brand">ChemVerse3D</span>
-    <a href="/compare">Compare</a>
-    {% include "_account.html" %}
-  </div>
+  {% include "_nav.html" %}
 
   <main>
     <section class="card center" id="start">
@@ -170,7 +165,7 @@
       if (q.molblock) {
         holder.style.display = "block";
         $("q-canvas").innerHTML = "";
-        view = new MolView($("q-canvas"), { colors: q.colors || {}, showTitle: false });
+        view = new MolView($("q-canvas"), { colors: q.colors || {}, showTitle: false, fitScale: "auto" });
         view.load(q.molblock);
       } else {
         holder.style.display = "none"; view = null;

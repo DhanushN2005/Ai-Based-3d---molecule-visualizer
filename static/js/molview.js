@@ -13,10 +13,12 @@
       this.colors = opts.colors || {};
       this.names = opts.names || {};
       this.title = opts.title || "";
+      this.el = el;
       this.formula = opts.formula || "";
       this.smiles = opts.smiles || "";
       this.tip = opts.tip || null;          // element for hover tooltip (optional)
       this.tipBox = opts.tipBox || el;      // element the tooltip is positioned in
+      this.fitScale = opts.fitScale || 0.85;   // number, or "auto" to scale by molecule size
       this.dark = opts.dark !== false;
       this.styleKind = "bs";
       this.atomLabels = "off";
@@ -131,7 +133,13 @@
 
     fit() {            // zoom to the molecule with margin for the toolbar and floating title
       this.v.zoomTo();
-      this.v.zoom(0.85);
+      let k = this.fitScale;
+      if (k === "auto") {                      // tiny molecules fill the panel, big ones keep a margin
+        const n = this.atoms().length;
+        k = n <= 6 ? 1.6 : n <= 14 ? 1.35 : 1.12;
+        if (this.el.clientWidth < 520) k *= 0.85;   // long molecules need more room on narrow panels
+      }
+      this.v.zoom(k);
       this.v.render();
     }
 

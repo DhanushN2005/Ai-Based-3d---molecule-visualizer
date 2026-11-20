@@ -127,6 +127,8 @@
   </style>
 </head>
 <body>
+  {% set nav_variant = 'overlay' %}
+  {% include "_nav.html" %}
   <video class="bg-video" autoplay muted loop playsinline>
     <source src="{{ url_for('static', filename='bg.mp4') }}" type="video/mp4">
   </video>
@@ -150,12 +152,6 @@
         {% for m in molecules[:6] %}<span class="chip" role="button" tabindex="0" data-name="{{ m }}">{{ m }}</span>{% endfor %}
       </div>
 
-      <div class="links">
-        <a href="/quiz">Quiz mode</a>
-        <a href="/compare">Compare two molecules</a>
-        <a href="/leaderboard">Leaderboard</a>
-        {% if current_user %}<a href="/favorites">Favourites</a>{% else %}<a href="/login">Log in</a>{% endif %}
-      </div>
 
       <div id="status" role="status" aria-live="polite"></div>
       <p class="credit">Built by <a href="https://dhanushnataraj.netlify.app" target="_blank" rel="noopener noreferrer">Dhanush Nataraj</a></p>

@@ -8,13 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
 <body>
-  <div class="topbar">
-    <a href="/">&larr; Home</a>
-    <a class="brand" href="/">ChemVerse3D</a>
-    <a href="/search">Search</a>
-    <a href="/quiz">Quiz</a>
-    {% include "_account.html" %}
-  </div>
+  {% include "_nav.html" %}
   <main>
     <div class="card">
       <h1>Leaderboard</h1>

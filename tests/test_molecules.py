@@ -91,3 +91,36 @@ def test_blender_failure_does_not_crash_the_request(monkeypatch):
     monkeypatch.setattr(main, "generate_blender_py", lambda mol, name: "s.py")
     monkeypatch.setattr(main, "run_blender_script", lambda path: (_ for _ in ()).throw(FileNotFoundError("no blender")))
     assert main.ensure_glb("water", main.get_mol("water"), force=True) is None
+
+
+def test_glb_export_does_not_need_scipy(tmp_path):
+    """Regression: on a clean install (Render, CI) scipy is absent and trimesh's default colour and
+    normal handling needs it. The export must work with scipy blocked."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parent.parent
+    script = (
+        "import sys\n"
+        "sys.modules['scipy'] = None\n"                     # any 'import scipy' now raises ImportError
+        f"sys.path.insert(0, {str(repo)!r})\n"
+        "from generate_xyz import build_molecule\n"
+        "from glb_trimesh import build_glb\n"
+        "build_glb(build_molecule('CCO', 'ethanol'), 'ethanol')\n"
+    )
+    result = subprocess.run([sys.executable, "-c", script], cwd=tmp_path, capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr[-800:]
+    scene = trimesh.load(tmp_path / "outputs" / "ethanol.glb")
+    assert scene.bounds is not None
+
+
+def test_glb_keeps_element_colours_and_normals(tmp_path):
+    mol = main.get_mol("water")
+    path = main.ensure_glb("water", mol, force=True)
+    scene = trimesh.load(path)
+    geoms = list(scene.geometry.values())
+    colours = {tuple(c[:3]) for g in geoms for c in g.visual.vertex_colors}
+    assert (255, 13, 13) in colours                          # oxygen red
+    assert (255, 255, 255) in colours                        # hydrogen white
+    assert all(len(g.vertex_normals) == len(g.vertices) for g in geoms)

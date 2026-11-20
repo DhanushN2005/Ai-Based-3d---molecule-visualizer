@@ -13,7 +13,7 @@ services:
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.9
+        value: 3.12.7
       - key: TRUST_PROXY
         value: "1"
       - key: SESSION_COOKIE_SECURE

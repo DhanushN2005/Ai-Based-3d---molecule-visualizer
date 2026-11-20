@@ -31,13 +31,13 @@
     .btn.primary { color:#04211d; border:none; background:linear-gradient(90deg,var(--accent),var(--accent-2)); }
     .vs { color:var(--muted); font-weight:700; }
     .err { text-align:center; color:#fca5a5; margin:0 0 16px; }
-    .empty { text-align:center; color:var(--muted); padding:60px 0; }
+    .empty { text-align:center; color:var(--muted); padding:14vh 0 10vh; }
     .tools { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:14px; }
     .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
     .card { background:var(--panel); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
     .card h2 { margin:0; padding:14px 18px 0; font-size:1.3rem; text-transform:capitalize; }
     .card .f { padding:2px 18px 10px; color:var(--accent); font-weight:600; }
-    .view { position:relative; height:52vh; min-height:340px; }
+    .view { position:relative; height:46vh; min-height:300px; }
     .view > div { position:absolute; inset:0; }
     table { width:100%; border-collapse:collapse; margin-top:20px; background:var(--panel);
             border:1px solid var(--border); border-radius:16px; overflow:hidden; }
@@ -48,19 +48,14 @@
     .panel { margin-top:20px; padding:18px; background:var(--panel); border:1px solid var(--border); border-radius:16px; }
     .panel h3 { margin:0 0 8px; font-size:.8rem; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; }
     #ai { margin:0; line-height:1.75; color:#e2e8f0; white-space:pre-wrap; }
-    @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:14px; } }
+    @media (max-width:800px) { .grid { grid-template-columns:1fr; } main { padding:14px; } .view { height:38vh; min-height:260px; } }
     .site-credit { text-align:center; padding:22px 16px 28px; font-size:.82rem; color:#94a3b8; }
     .site-credit a { color:#5eead4; text-decoration:none; }
     .site-credit a:hover { text-decoration:underline; }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <a href="/">← Home</a>
-    <span class="brand">ChemVerse3D</span>
-    <a href="/quiz">Quiz</a>
-    {% include "_account.html" %}
-  </div>
+  {% include "_nav.html" %}
 
   <main>
     <form class="pick" method="get" action="/compare" autocomplete="off">
@@ -113,7 +108,7 @@
     function make(el, info) {
       const names = {}; info.elements.forEach(e => names[e.symbol] = e.name);
       const mv = new MolView(el, { colors: info.colors, names, title: info.title,
-                                   formula: info.formula, smiles: info.smiles, showTitle: false });
+                                   formula: info.formula, smiles: info.smiles, showTitle: false, fitScale: "auto" });
       mv.load(info.molblock);
       return mv;
     }
